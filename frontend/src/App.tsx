@@ -1,25 +1,15 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  ArrowRight,
-  BadgeCheck,
-  Banknote,
-  BriefcaseBusiness,
+  ArrowDownRight,
+  ArrowUpRight,
   CheckCircle2,
-  CircleDollarSign,
   Clock3,
-  Fingerprint,
-  Gauge,
-  Landmark,
+  Layers,
   Loader2,
-  LockKeyhole,
-  ReceiptText,
-  RefreshCw,
-  Send,
+  Sparkles,
+  Wallet,
   ShieldCheck,
-  TrendingUp,
-  UsersRound,
-  WalletCards,
 } from "lucide-react";
 import {
   connectEmployer,
@@ -31,442 +21,580 @@ import {
   loginEmployee,
   restoreEmployeeSession,
   withdraw,
-  type ActivityItem,
-  type EmployeeBalance,
-  type EmployeeSession,
-  type EmployerStats,
-  type TxStatus,
 } from "./sdk/yieldflow-sdk";
+import type {
+  ActivityItem,
+  EmployeeBalance,
+  EmployeeSession,
+  EmployerStats,
+  EmployerConnection,
+  TxStatus,
+} from "./sdk/yieldflow-sdk";
+import { useAnimatedNumber, formatRelativeTime } from "./animation-utils";
 
-type View = "employer" | "employee" | "activity" | "settings";
+const kindIcons = {
+  deposit: ArrowUpRight,
+  withdraw: ArrowDownRight,
+  stream: Layers,
+  yield: Sparkles,
+  auth: Wallet,
+} as const;
 
-type TxViewState = {
-  status: TxStatus;
-  txHash?: string;
-  message: string;
+const kindLabel: Record<ActivityItem['kind'], string> = {
+  deposit: "Payroll deposit",
+  withdraw: "Withdraw settled",
+  stream: "Employee stream",
+  yield: "Yield harvested",
+  auth: "Passkey restored",
 };
 
-const initialTx: TxViewState = { status: "idle", message: "Ready" };
-
-const formatUsdc = (value: string, digits = 2) =>
-  `${Number(value).toLocaleString(undefined, {
+const formatMoney = (value: number, digits = 2) =>
+  value.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  })} USDC`;
+  });
 
-const shortHash = (hash?: string) => (hash ? `${hash.slice(0, 8)}...${hash.slice(-6)}` : "--");
+const shortAddress = (address: string) =>
+  `${address.slice(0, 8)}...${address.slice(-6)}`;
 
-function App() {
-  const [view, setView] = useState<View>("employer");
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
+const toastStyle = {
+  deposit: "info",
+  withdraw: "warning",
+  confirmed: "success",
+  failed: "error",
+} as const;
 
-  useEffect(() => {
-    void getActivity().then(setActivity);
-  }, []);
+const initialNotifications: Array<{
+  id: string;
+  title: string;
+  message: string;
+  type: "info" | "success" | "error";
+  timestamp: number;
+}> = [];
 
-  return (
-    <div className="app-shell">
-      <BackgroundLines />
-      <TopNav view={view} onViewChange={setView} />
-      <main className="main-canvas">
-        {view === "employer" && <EmployerDashboard activity={activity} />}
-        {view === "employee" && <EmployeeDashboard activity={activity} />}
-        {view === "activity" && <ActivityView activity={activity} />}
-        {view === "settings" && <SettingsView />}
-      </main>
-    </div>
-  );
-}
-
-function BackgroundLines() {
-  return (
-    <div className="background-lines" aria-hidden="true">
-      <div className="line line-one" />
-      <div className="line line-two" />
-      <div className="line line-three" />
-    </div>
-  );
-}
-
-function TopNav({ view, onViewChange }: { view: View; onViewChange: (view: View) => void }) {
-  const items: View[] = ["employer", "employee", "activity", "settings"];
-  return (
-    <header className="top-shell">
-      <button className="brand-mark" onClick={() => onViewChange("employer")}>
-        <span className="brand-glyph">YF</span>
-        <span>YieldFlow</span>
-      </button>
-      <nav className="pill-nav" aria-label="Primary navigation">
-        {items.map((item) => (
-          <button
-            key={item}
-            className={view === item ? "nav-item active" : "nav-item"}
-            onClick={() => onViewChange(item)}
-          >
-            {item}
-          </button>
-        ))}
-      </nav>
-      <div className="status-pill">
-        <span className="status-dot" /> Mock SDK · Stellar Testnet
-      </div>
-    </header>
-  );
-}
-
-function EmployerDashboard({ activity }: { activity: ActivityItem[] }) {
+export default function App() {
+  const [employer, setEmployer] = useState<EmployerConnection | null>(null);
+  const [employee, setEmployee] = useState<EmployeeSession | null>(null);
+  const [balance, setBalance] = useState<EmployeeBalance | null>(null);
   const [stats, setStats] = useState<EmployerStats | null>(null);
-  const [address, setAddress] = useState<string>("");
-  const [tx, setTx] = useState<TxViewState>(initialTx);
-  const busy = ["authenticating", "building", "submitted", "pending"].includes(tx.status);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [statusMessage, setStatusMessage] = useState("Ready to flow capital.");
+  const [authenticating, setAuthenticating] = useState(false);
+  const [depositing, setDepositing] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [transactionQueue, setTransactionQueue] = useState<{
+    txHash: string;
+    status: TxStatus;
+    kind: "deposit" | "withdraw";
+    amount: string;
+    startedAt: number;
+  }[]>([]);
+  const [notifications, setNotifications] = useState(initialNotifications);
+  const [liveTarget, setLiveTarget] = useState(0);
+  
+  const activeTx = transactionQueue.find((tx) => tx.status === "pending" || tx.status === "submitted");
+
+  const liveBalance = useAnimatedNumber(liveTarget, 500);
 
   useEffect(() => {
-    void connectEmployer().then((result) => setAddress(result.address));
-    void getEmployerStats().then(setStats);
+    const init = async () => {
+      try {
+        setStatusMessage("Booting yield engine...");
+        const [connection, statsResponse, activityResponse] = await Promise.all([
+          connectEmployer(),
+          getEmployerStats(),
+          getActivity(),
+        ]);
+
+        setEmployer(connection);
+        setStats(statsResponse);
+        setActivity(activityResponse);
+
+        const restore = await restoreEmployeeSession();
+        if (restore.employeeId) {
+          setEmployee({
+            employeeId: restore.employeeId,
+            name: "Aditiya Sharma",
+            walletAddress: "CCONTRACT...PASSKEY...YF01",
+          });
+          const nextBalance = await getEmployeeBalance(restore.employeeId);
+          setBalance(nextBalance);
+        }
+
+        setStatusMessage("Ready to flow capital.");
+      } catch (error) {
+        console.error(error);
+        setStatusMessage("Unable to initialize. Refresh to retry.");
+      }
+    };
+
+    void init();
   }, []);
 
-  async function handleDeposit() {
-    if (busy) return;
-    setTx({ status: "building", message: "Preparing testnet payroll deposit" });
-    const result = await depositPayroll("50000.00");
-    if (result.status === "failed") {
-      setTx({ status: "failed", txHash: result.txHash, message: "Mock deposit failed" });
+  useEffect(() => {
+    if (!balance) {
+      setLiveTarget(0);
       return;
     }
-    setTx({ status: "pending", txHash: result.txHash, message: "Submitted. Waiting for confirmation" });
-    pollTx(result.txHash, setTx);
-  }
 
-  const chartBars = [36, 44, 42, 52, 61, 58, 72, 76, 86, 92, 88, 96];
+    const base = parseFloat(balance.unlockedAmount);
+    const rate = parseFloat(balance.ratePerSecond);
+    const startTime = Date.now();
+    setLiveTarget(base);
 
-  return (
-    <section className="screen-section">
-      <Hero
-        eyebrow="Gasless Payroll Streaming"
-        title={<>Payroll That <span>Streams</span>. Yield That <span>Works</span>.</>}
-        copy="A demo-ready treasury surface for monthly USDC payroll, instant liquidity, and continuously unlocking salary streams."
-      />
-
-      <div className="dashboard-grid employer-grid">
-        <MetricCard icon={<Landmark />} label="Total Payroll Pool" value={stats ? formatUsdc(stats.totalPool, 2) : "Loading"} />
-        <MetricCard icon={<TrendingUp />} label="Yield Earned" value={stats ? `+${formatUsdc(stats.yieldEarned, 2)}` : "Loading"} tone="accent" sub={`${stats?.projectedApy ?? "--"}% projected APY`} />
-        <MetricCard icon={<Gauge />} label="Liquidity Buffer" value={stats ? formatUsdc(stats.bufferAmount, 2) : "Loading"} sub="Healthy · 15% reserve" />
-        <MetricCard icon={<UsersRound />} label="Active Employees" value={stats ? String(stats.activeEmployees) : "--"} sub="Streaming live" />
-
-        <Panel className="allocation-panel">
-          <div className="panel-header">
-            <div>
-              <p className="label">Treasury Allocation</p>
-              <h2>Vault split</h2>
-            </div>
-            <span className="chip">USDC SAC ready</span>
-          </div>
-          <div className="allocation-bar" aria-label="85 percent yield route, 15 percent buffer">
-            <span style={{ width: `${stats?.yieldRoutePercent ?? 85}%` }} />
-          </div>
-          <div className="allocation-legend">
-            <span><i className="berry" />85% Yield Route</span>
-            <span><i className="cream" />15% Liquidity Buffer</span>
-          </div>
-          <button className="primary-btn" onClick={handleDeposit} disabled={busy}>
-            {busy ? <Loader2 className="spin" /> : <CircleDollarSign />} Deposit Payroll
-          </button>
-          <TransactionStatus tx={tx} />
-        </Panel>
-
-        <Panel className="flow-panel browser-frame">
-          <div className="browser-top">
-            <span /><span /><span />
-            <p>Payroll Flow Visualization</p>
-          </div>
-          <div className="flow-map">
-            <FlowNode icon={<BriefcaseBusiness />} label="Employer Deposit" />
-            <ArrowRight className="flow-arrow" />
-            <FlowNode icon={<WalletCards />} label="Vault" />
-            <ArrowRight className="flow-arrow" />
-            <FlowNode icon={<TrendingUp />} label="DeFindex / Blend" active />
-            <ArrowRight className="flow-arrow" />
-            <FlowNode icon={<ShieldCheck />} label="Liquidity Buffer" />
-            <ArrowRight className="flow-arrow" />
-            <FlowNode icon={<Send />} label="Employee Stream" />
-          </div>
-        </Panel>
-
-        <Panel className="chart-panel">
-          <div className="panel-header">
-            <div>
-              <p className="label">Yield Earned</p>
-              <h2>30 day curve</h2>
-            </div>
-            <span className="chip">Mock data</span>
-          </div>
-          <div className="yield-chart">
-            {chartBars.map((height, index) => <span key={index} style={{ height: `${height}%` }} />)}
-          </div>
-        </Panel>
-
-        <ActivityFeed activity={activity} address={address} />
-      </div>
-    </section>
-  );
-}
-
-function EmployeeDashboard({ activity }: { activity: ActivityItem[] }) {
-  const [session, setSession] = useState<EmployeeSession | null>(null);
-  const [balance, setBalance] = useState<EmployeeBalance | null>(null);
-  const [displayBalance, setDisplayBalance] = useState("0.0000000");
-  const [authError, setAuthError] = useState("");
-  const [tx, setTx] = useState<TxViewState>(initialTx);
-  const busy = ["authenticating", "building", "submitted", "pending"].includes(tx.status);
-
-  useEffect(() => {
-    void restoreEmployeeSession().then(async (result) => {
-      if (!result.employeeId) return;
-      const restored = { employeeId: result.employeeId, name: "Aditiya Sharma", walletAddress: "CCONTRACT...PASSKEY...YF01" };
-      setSession(restored);
-      setBalance(await getEmployeeBalance(restored.employeeId));
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    const refresh = async () => {
-      const next = await getEmployeeBalance(session.employeeId);
-      if (!cancelled) setBalance(next);
-    };
-    void refresh();
-    const timer = window.setInterval(refresh, 5000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [session]);
-
-  useEffect(() => {
-    if (!balance) return;
-    let current = Number(balance.unlockedAmount);
-    setDisplayBalance(current.toFixed(7));
-    const rate = Number(balance.ratePerSecond);
     const timer = window.setInterval(() => {
-      current += rate;
-      setDisplayBalance(current.toFixed(7));
-    }, 1000);
+      const elapsed = (Date.now() - startTime) / 1000;
+      setLiveTarget(base + elapsed * rate);
+    }, 280);
+
     return () => window.clearInterval(timer);
   }, [balance]);
 
-  async function handleLogin() {
-    setAuthError("");
-    setTx({ status: "authenticating", message: "Waiting for passkey prompt" });
+  useEffect(() => {
+    if (!transactionQueue.some((tx) => tx.status === "pending")) {
+      return;
+    }
+
+    const poll = window.setInterval(() => {
+      transactionQueue.forEach(async (tx) => {
+        if (tx.status !== "pending") return;
+        const status = await getTransactionStatus(tx.txHash);
+        if (status === tx.status) return;
+
+        setTransactionQueue((current) =>
+          current.map((item) => (item.txHash === tx.txHash ? { ...item, status } : item)),
+        );
+
+        if (status === "confirmed") {
+          addNotification(`Transaction confirmed`, "success");
+          setStatusMessage("Transaction confirmed. Yield is live.");
+          if (employee) {
+            const refreshed = await getEmployeeBalance(employee.employeeId);
+            setBalance(refreshed);
+          }
+        }
+
+        if (status === "failed") {
+          addNotification(`Transaction failed`, "error");
+          setStatusMessage("Transaction failed. Try again.");
+        }
+      });
+    }, 1800);
+
+    return () => window.clearInterval(poll);
+  }, [transactionQueue, employee]);
+
+  useEffect(() => {
+    if (!notifications.length) return;
+    const timer = window.setTimeout(() => {
+      setNotifications((current) => current.slice(1));
+    }, 4200);
+    return () => window.clearTimeout(timer);
+  }, [notifications]);
+
+  const addNotification = useCallback(
+    (message: string, type: "info" | "success" | "error") => {
+      const next = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: type === "success" ? "Success" : type === "error" ? "Failed" : "Update",
+        message,
+        type,
+        timestamp: Date.now(),
+      };
+      setNotifications((current) => [next, ...current].slice(0, 4));
+    },
+    [],
+  );
+
+  const handleLogin = async () => {
+    if (authenticating) return;
+    setAuthenticating(true);
+    setStatusMessage("Authenticating with Passkey...");
+
     try {
-      const nextSession = await loginEmployee();
-      setSession(nextSession);
-      setBalance(await getEmployeeBalance(nextSession.employeeId));
-      setTx({ status: "confirmed", message: "Passkey session active" });
+      const session = await loginEmployee();
+      setEmployee(session);
+      addNotification("Passkey login complete.", "success");
+      setStatusMessage(`Welcome back, ${session.name.split(" ")[0]}.`);
+      const nextBalance = await getEmployeeBalance(session.employeeId);
+      setBalance(nextBalance);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Unable to login");
-      setTx({ status: "failed", message: "Passkey login failed" });
+      const message = error instanceof Error ? error.message : "Unable to sign in.";
+      addNotification(message, "error");
+      setStatusMessage("Passkey authentication failed.");
+    } finally {
+      setAuthenticating(false);
     }
-  }
-
-  async function handleWithdraw() {
-    if (!session || busy) return;
-    setTx({ status: "authenticating", message: "Authorizing gasless withdrawal" });
-    await wait(450);
-    setTx({ status: "building", message: "Building withdrawal call" });
-    const result = await withdraw(session.employeeId);
-    if (result.status === "failed") {
-      setTx({ status: "failed", txHash: result.txHash, message: "Withdrawal failed in mock relayer" });
-      return;
-    }
-    setTx({ status: "pending", txHash: result.txHash, message: `Submitted ${formatUsdc(result.amountReceived, 4)}` });
-    pollTx(result.txHash, setTx);
-  }
-
-  const progress = useMemo(() => {
-    if (!balance) return 0;
-    return Math.min(100, (Number(displayBalance) / Number(balance.streamCap)) * 100);
-  }, [balance, displayBalance]);
-
-  return (
-    <section className="screen-section">
-      <Hero
-        eyebrow="Passkey Secured · Zero Seed Phrases"
-        title={<>Your Salary, <span>Unlocking Live</span>.</>}
-        copy="Track the amount you can withdraw right now, authenticate with a passkey, and receive test USDC without touching network fees."
-      />
-
-      <div className="dashboard-grid employee-grid">
-        <Panel className="live-balance-panel">
-          <div className="panel-header">
-            <div>
-              <p className="label">Live Balance</p>
-              <h2>Available salary</h2>
-            </div>
-            <span className="chip">{session ? "Passkey active" : "Login required"}</span>
-          </div>
-          <div className="live-amount">{Number(displayBalance).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 7 })}<small>USDC</small></div>
-          <div className="stream-progress">
-            <div className="stream-progress-top"><span>Streaming progress</span><span>{progress.toFixed(1)}%</span></div>
-            <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
-          </div>
-        </Panel>
-
-        <div className="mini-grid">
-          <MetricCard icon={<Banknote />} label="Available Now" value={balance ? formatUsdc(displayBalance, 4) : "--"} tone="accent" />
-          <MetricCard icon={<RefreshCw />} label="Rate / sec" value={balance ? `+${balance.ratePerSecond}` : "--"} sub="USDC" />
-          <MetricCard icon={<Clock3 />} label="Next Payday" value={balance?.nextPayday ?? "--"} />
-          <MetricCard icon={<LockKeyhole />} label="Wallet Session" value={session ? "Active" : "Locked"} sub={session?.walletAddress ?? "Passkey required"} />
-        </div>
-
-        <Panel className="passkey-panel">
-          <div className="passkey-icon"><Fingerprint /></div>
-          <div>
-            <p className="label">Employee Access</p>
-            <h2>{session ? session.name : "Passkey login"}</h2>
-            <p className="muted">{session ? session.walletAddress : "Authenticate once and restore your smart account session silently later."}</p>
-          </div>
-          {authError && <p className="error-text">{authError}</p>}
-          <button className="secondary-btn" onClick={handleLogin} disabled={busy}>{session ? "Refresh Session" : "Login With Passkey"}</button>
-        </Panel>
-
-        <Panel className="withdraw-panel">
-          <button className="primary-btn" onClick={handleWithdraw} disabled={!session || busy}>
-            {busy ? <Loader2 className="spin" /> : <WalletCards />} Withdraw Funds
-          </button>
-          <TransactionStatus tx={tx} />
-        </Panel>
-
-        <ActivityFeed activity={activity.filter((item) => item.kind !== "deposit")} />
-      </div>
-    </section>
-  );
-}
-
-function Hero({ eyebrow, title, copy }: { eyebrow: string; title: React.ReactNode; copy: string }) {
-  return (
-    <header className="hero-block">
-      <div className="eyebrow"><BadgeCheck /> {eyebrow}</div>
-      <h1>{title}</h1>
-      <p>{copy}</p>
-    </header>
-  );
-}
-
-function MetricCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: "accent" }) {
-  return (
-    <article className={tone === "accent" ? "metric-card accent" : "metric-card"}>
-      <div className="metric-top"><span>{label}</span>{icon}</div>
-      <strong>{value}</strong>
-      {sub && <small>{sub}</small>}
-    </article>
-  );
-}
-
-function Panel({ className = "", children }: { className?: string; children: React.ReactNode }) {
-  return <section className={`glass-panel ${className}`}>{children}</section>;
-}
-
-function FlowNode({ icon, label, active }: { icon: React.ReactNode; label: string; active?: boolean }) {
-  return (
-    <div className={active ? "flow-node active" : "flow-node"}>
-      <div>{icon}</div>
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function ActivityFeed({ activity, address }: { activity: ActivityItem[]; address?: string }) {
-  const iconMap = {
-    deposit: <CircleDollarSign />,
-    stream: <Activity />,
-    yield: <TrendingUp />,
-    withdraw: <ReceiptText />,
-    auth: <Fingerprint />,
   };
+
+  const handleDeposit = async () => {
+    if (!employee || depositing) return;
+    setDepositing(true);
+    setStatusMessage("Submitting payroll funding...");
+
+    try {
+      const result = await depositPayroll("50,000");
+      const nextStatus: TxStatus = result.status === "failed" ? "failed" : "pending";
+      const nextTx = {
+        txHash: result.txHash,
+        status: nextStatus,
+        kind: "deposit" as const,
+        amount: "$50,000",
+        startedAt: Date.now(),
+      };
+      setTransactionQueue((current) => [nextTx, ...current].slice(0, 5));
+
+      if (result.status === "failed") {
+        addNotification("Payroll funding failed to submit.", "error");
+        setStatusMessage("Payroll funding error.");
+      } else {
+        addNotification("Payroll funding is in motion.", "info");
+        setStatusMessage("Payroll submitted. Confirming... ");
+        setActivity((current) => [
+          {
+            id: `deposit-${result.txHash}`,
+            kind: "deposit",
+            label: "Payroll deposit",
+            timestamp: "Just now",
+            amount: "+50,000 USDC",
+          } as ActivityItem,
+          ...current,
+        ].slice(0, 8));
+      }
+    } catch (error) {
+      addNotification("Unable to submit payroll.", "error");
+      setStatusMessage("Payroll submission failed.");
+    } finally {
+      setDepositing(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!employee || withdrawing || !balance) return;
+    setWithdrawing(true);
+    setStatusMessage("Requesting withdrawal...");
+
+    try {
+      const result = await withdraw(employee.employeeId);
+      const nextStatus: TxStatus = result.status === "failed" ? "failed" : "pending";
+      const nextTx = {
+        txHash: result.txHash,
+        status: nextStatus,
+        kind: "withdraw" as const,
+        amount: `$${Number(result.amountReceived).toFixed(2)}`,
+        startedAt: Date.now(),
+      };
+      setTransactionQueue((current) => [nextTx, ...current].slice(0, 5));
+
+      if (result.status === "failed") {
+        addNotification("Withdrawal failed to submit.", "error");
+        setStatusMessage("Withdrawal error.");
+      } else {
+        addNotification("Withdrawal request queued.", "info");
+        setStatusMessage("Withdrawal submitted. Awaiting final settlement.");
+        setActivity((current) => [
+          {
+            id: `withdraw-${result.txHash}`,
+            kind: "withdraw",
+            label: "Payout withdrawal",
+            timestamp: "Just now",
+            amount: `-${Number(result.amountReceived).toFixed(2)} USDC`,
+          } as ActivityItem,
+          ...current,
+        ].slice(0, 8));
+      }
+    } catch (error) {
+      addNotification("Unable to withdraw right now.", "error");
+      setStatusMessage("Withdrawal failed.");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const activeProof = employee ? shortAddress(employee.walletAddress) : "Connect to begin";
+
+  const displayStats = useMemo(
+    () => ({
+      totalPool: stats ? formatMoney(parseFloat(stats.totalPool)) : "--",
+      yieldEarned: stats ? formatMoney(parseFloat(stats.yieldEarned)) : "--",
+      bufferAmount: stats ? formatMoney(parseFloat(stats.bufferAmount)) : "--",
+      activeEmployees: stats ? stats.activeEmployees : 0,
+      projectedApy: stats?.projectedApy ?? "--",
+    }),
+    [stats],
+  );
+
   return (
-    <Panel className="activity-panel">
-      <div className="panel-header">
-        <div>
-          <p className="label">Recent Activity</p>
-          <h2>Ledger view</h2>
-        </div>
+    <div className="app-shell">
+      <div className="background-lines">
+        <div className="line line-one" />
+        <div className="line line-two" />
+        <div className="line line-three" />
       </div>
-      {address && <p className="muted wallet-line">{address}</p>}
-      <div className="activity-list">
-        {activity.map((item) => (
-          <div className="activity-row" key={item.id}>
-            <span className="activity-icon">{iconMap[item.kind]}</span>
-            <div>
-              <strong>{item.label}</strong>
-              <small>{item.timestamp}</small>
+
+      <section className="top-shell">
+        <button className="brand-mark" type="button">
+          <span className="brand-glyph">YF</span>
+          YieldFlow
+        </button>
+
+        <div className="pill-nav">
+          <button className="nav-item active" type="button">
+            Dashboard
+          </button>
+          <button className="nav-item" type="button">
+            Flows
+          </button>
+          <button className="nav-item" type="button">
+            Activity
+          </button>
+        </div>
+
+        <div className="status-pill">
+          <span className="status-dot" />
+          <span>{statusMessage}</span>
+        </div>
+      </section>
+
+      <main className="main-canvas">
+        <section className="screen-section compact-screen hero-block">
+          <span className="eyebrow">Premium payroll yield orchestration</span>
+          <h1>
+            Animate workplace payroll, capture yield, and keep every employee flow connected.
+          </h1>
+          <p>
+            The app now surfaces transactional movement, confirms each step with motion, and keeps the live stream balance visually in sync with every activity.
+          </p>
+        </section>
+
+        <section className="dashboard-grid">
+          <article className="metric-card accent">
+            <div className="metric-top">
+              <span>Total pool</span>
+              <Sparkles />
             </div>
-            <span className="activity-amount">{item.amount}</span>
+            <strong>{displayStats.totalPool}</strong>
+            <small>Capital under yield allocation</small>
+          </article>
+
+          <article className="metric-card">
+            <div className="metric-top">
+              <span>Yield earned</span>
+              <span>{stats?.projectedApy}% APY</span>
+            </div>
+            <strong>{displayStats.yieldEarned}</strong>
+            <small>Accumulated from underlying streams</small>
+          </article>
+
+          <article className="metric-card">
+            <div className="metric-top">
+              <span>Buffer reserve</span>
+              <span>{stats?.bufferPercent}%</span>
+            </div>
+            <strong>{displayStats.bufferAmount}</strong>
+            <small>Liquidity kept for instant withdrawals</small>
+          </article>
+
+          <article className="metric-card">
+            <div className="metric-top">
+              <span>Active employees</span>
+              <span>{stats?.projectedApy}%</span>
+            </div>
+            <strong>{displayStats.activeEmployees}</strong>
+            <small>Live staff receiving streamed pay</small>
+          </article>
+
+          <section className="flow-panel glass-panel">
+            <div className="panel-header">
+              <div>
+                <p className="label">Live employee stream</p>
+                <h2>Continuous wage settlement</h2>
+              </div>
+              <span className="chip">Flowing now</span>
+            </div>
+
+            <p className="live-amount">
+              {formatMoney(liveBalance, 2)}
+              <small>{balance ? `${Number(balance.ratePerSecond).toFixed(4)} USDC/sec` : "0.0000 USDC/sec"}</small>
+            </p>
+
+            <div className="stream-progress">
+              <div className="stream-progress-top">
+                <span>Next payday</span>
+                <span>{balance?.nextPayday ?? "Waiting"}</span>
+              </div>
+              <div className="progress-track">
+                <span style={{ width: stats ? `${Math.min(100, (Number(balance?.unlockedAmount ?? 0) / Number(balance?.streamCap ?? 1)) * 100)};%` : "0%" }} />
+              </div>
+            </div>
+
+            <button className="primary-btn" type="button" onClick={handleDeposit} disabled={depositing || !employee}>
+              {depositing ? <Loader2 className="spin" /> : <ArrowUpRight />}
+              {depositing ? "Funding payroll…" : "Fund payroll"}
+            </button>
+          </section>
+
+          <section className="chart-panel glass-panel">
+            <div className="panel-header">
+              <div>
+                <p className="label">Activity map</p>
+                <h2>Connected settlement flow</h2>
+              </div>
+              <span className="chip">Momentum</span>
+            </div>
+
+            <div className="flow-map">
+              <div className="flow-node active">
+                <div>
+                  <Wallet />
+                </div>
+                Employer pool
+              </div>
+              <div className="flow-arrow">→</div>
+              <div className="flow-node active">
+                <div>
+                  <Layers />
+                </div>
+                Yield vault
+              </div>
+              <div className="flow-arrow">→</div>
+              <div className="flow-node active">
+                <div>
+                  <Activity />
+                </div>
+                Employee streams
+              </div>
+            </div>
+
+            <div className="tx-status">
+              <div className="tx-header">
+                <span>Latest transaction</span>
+                <strong>{activeTx?.status ?? "idle"}</strong>
+              </div>
+              <div className="tx-steps">
+                <span className={activeTx?.status === "pending" ? "current" : activeTx?.status === "confirmed" ? "done" : ""}>
+                  {activeTx ? activeTx.kind : "no activity"}
+                </span>
+                <span className={activeTx?.status === "confirmed" ? "done" : ""}>
+                  confirmed
+                </span>
+              </div>
+              {activeTx && (
+                <div className="tx-hash">
+                  <code>{activeTx.txHash.slice(0, 12)}...</code>
+                  <span>{activeTx.amount}</span>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="activity-panel glass-panel">
+            <div className="panel-header">
+              <div>
+                <p className="label">Activity feed</p>
+                <h2>Recent motion</h2>
+              </div>
+              <span className="chip">Live</span>
+            </div>
+
+            <div className="activity-list">
+              {activity.map((item) => {
+                const Icon = kindIcons[item.kind] ?? Activity;
+                return (
+                  <div className="activity-row" key={item.id}>
+                    <div className="activity-icon" style={{ background: item.kind === "withdraw" ? "rgba(255, 103, 102, 0.18)" : "rgba(202, 40, 81, 0.14)" }}>
+                      <Icon />
+                    </div>
+                    <div>
+                      <strong>{item.label ?? kindLabel[item.kind]}</strong>
+                      <small>{item.timestamp}</small>
+                    </div>
+                    <div className="activity-amount">{item.amount}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="live-balance-panel glass-panel">
+            <div className="panel-header">
+              <div>
+                <p className="label">Session snapshot</p>
+                <h2>Employee access</h2>
+              </div>
+              <span className="chip">Fast auth</span>
+            </div>
+
+            <div className="wallet-line">
+              <strong>{employee ? employee.name : "Not signed in"}</strong>
+              <small>{employee ? activeProof : "Passkey login required"}</small>
+            </div>
+
+            <button className="primary-btn" type="button" onClick={handleLogin} disabled={authenticating}>
+              {authenticating ? <Loader2 className="spin" /> : <ShieldCheck />}
+              {authenticating ? "Authenticating..." : employee ? "Restore session" : "Sign in with Passkey"}
+            </button>
+
+            <section className="mini-grid" style={{ marginTop: 24 }}>
+              <article className="metric-card">
+                <div className="metric-top">
+                  <span>Wallet</span>
+                  <Wallet />
+                </div>
+                <strong>{employee ? shortAddress(employee.walletAddress) : "—"}</strong>
+                <small>Connected employee account</small>
+              </article>
+
+              <article className="metric-card">
+                <div className="metric-top">
+                  <span>Authorization</span>
+                  <Clock3 />
+                </div>
+                <strong>{employee ? "Active" : "Offline"}</strong>
+                <small>Passkey session state</small>
+              </article>
+            </section>
+          </section>
+
+          <section className="withdraw-panel glass-panel">
+            <div className="panel-header">
+              <div>
+                <p className="label">Withdraw liquidity</p>
+                <h2>Instant payout request</h2>
+              </div>
+              <span className="chip">One-click</span>
+            </div>
+
+            <p className="muted">
+              Withdraw your available unlocked balance from the live stream to wallet settlement.
+            </p>
+
+            <button className="secondary-btn" type="button" onClick={handleWithdraw} disabled={!employee || withdrawing || !balance}>
+              {withdrawing ? <Loader2 className="spin" /> : <ArrowDownRight />}
+              {withdrawing ? "Withdrawing…" : "Request payout"}
+            </button>
+
+            <div className="setting-row" style={{ marginTop: 20 }}>
+              <strong>{balance ? formatMoney(Number(balance.unlockedAmount), 2) : "--"}</strong>
+              <small>Available unlocked amount</small>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <div className="toast-stack">
+        {notifications.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.type}`}>
+            <div className="toast-header">
+              <strong>{toast.title}</strong>
+              <small>{formatRelativeTime(toast.timestamp)}</small>
+            </div>
+            <p>{toast.message}</p>
           </div>
         ))}
       </div>
-    </Panel>
-  );
-}
-
-function TransactionStatus({ tx }: { tx: TxViewState }) {
-  const steps: TxStatus[] = ["idle", "authenticating", "building", "submitted", "pending", "confirmed"];
-  return (
-    <div className="tx-status">
-      <div className="tx-header"><span>Transaction Status</span><strong>{tx.status}</strong></div>
-      <p>{tx.message}</p>
-      <div className="tx-steps">
-        {steps.map((step) => (
-          <span key={step} className={step === tx.status ? "current" : steps.indexOf(step) < steps.indexOf(tx.status) ? "done" : ""}>
-            {step === tx.status && ["authenticating", "building", "submitted", "pending"].includes(step) ? <Loader2 className="spin" /> : <CheckCircle2 />}
-            {step}
-          </span>
-        ))}
-      </div>
-      {tx.txHash && <div className="tx-hash"><span>Tx hash</span><code>{shortHash(tx.txHash)}</code></div>}
     </div>
   );
 }
-
-function ActivityView({ activity }: { activity: ActivityItem[] }) {
-  return (
-    <section className="screen-section compact-screen">
-      <Hero eyebrow="Operational Timeline" title={<>Every Flow, <span>Traceable</span>.</>} copy="A shared activity surface for deposits, stream settlement, passkey access, and withdrawals." />
-      <ActivityFeed activity={activity} />
-    </section>
-  );
-}
-
-function SettingsView() {
-  return (
-    <section className="screen-section compact-screen">
-      <Hero eyebrow="Demo Configuration" title={<>SDK Boundary, <span>Locked</span>.</>} copy="These controls document the assumptions the frontend is built against while the Stellar integration matures." />
-      <Panel className="settings-panel">
-        <div className="setting-row"><span>Network</span><strong>Stellar Testnet</strong></div>
-        <div className="setting-row"><span>Asset</span><strong>USDC via SAC</strong></div>
-        <div className="setting-row"><span>Frontend mode</span><strong>Mock SDK only</strong></div>
-        <div className="setting-row"><span>Passkey provider</span><strong>SDK wrapped</strong></div>
-        <div className="setting-row"><span>Relayer</span><strong>SDK wrapped</strong></div>
-      </Panel>
-    </section>
-  );
-}
-
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function pollTx(txHash: string, setTx: (tx: TxViewState) => void) {
-  setTx({ status: "pending", txHash, message: "Waiting for Stellar testnet confirmation" });
-  for (let i = 0; i < 8; i += 1) {
-    const status = await getTransactionStatus(txHash);
-    if (status === "confirmed" || status === "failed") {
-      setTx({ status, txHash, message: status === "confirmed" ? "Confirmed in mock ledger" : "Transaction failed" });
-      return;
-    }
-    await wait(700);
-  }
-  setTx({ status: "failed", txHash, message: "Confirmation timed out" });
-}
-
-export default App;

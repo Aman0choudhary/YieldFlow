@@ -32,3 +32,13 @@
 - Action: Added top-level `README.md` with quick-start commands and notes about the mock SDK.
 - Files changed: `README.md` added at project root.
 - Next: Run a quick static type check in the frontend and verify the dev server starts.
+
+---
+
+## 2026-07-17 — UI animations + alignment polish
+
+- Action: Integrated premium motion/microinteractions without redesigning layout, palette, or hierarchy. Fixed alignment bugs from prior edits.
+- Fixes: broken progress width, mojibake labels, panel padding consistency, 12-col grid gaps, toast stack styles, tabular metrics.
+- Motion: staggered page entrance, metric count-up + value pulse, live salary stream glow/progress, treasury allocation bar animation, activity insert + filters + expand, tx-connected activity/toasts/badge, button ripple/success/error shake, skeleton boot, yield bar animation, reduced-motion support.
+- Files: `frontend/src/App.tsx`, `frontend/src/animation-utils.ts`, `frontend/src/styles.css`.
+- Verify: `npm --prefix frontend run build` passed (tsc + vite).
