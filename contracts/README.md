@@ -1,19 +1,18 @@
-# YieldFlow Contracts
+# Contracts
 
-Soroban/Stellar smart contract work will live here.
+Soroban contracts will live here.
 
-Planned contracts from `PLAN.md`:
+MVP contracts:
 
-- `streaming.rs`: timestamp-based employee salary accrual.
-- `vault.rs`: employer deposits, buffer accounting, and withdrawal accounting.
-- `defindex_router.rs`: DeFindex/Blend routing adapter.
+- `contracts/streaming`: employee stream accounting and unlocked balance calculation.
+- `contracts/vault`: employer deposits, buffer allocation, yield allocation accounting, and controlled buffer releases.
+- `contracts/defindex_router`: DeFindex and Blend routing once the core vault is stable.
 
-Implementation notes from Stellar skills:
+The first implementation target is the SDK contract documented in `docs/sdk-contract.md`.
 
-- Use `#![no_std]` and `soroban-sdk` types.
-- Prefer `__constructor` for initialization.
-- Use typed storage keys with `#[contracttype]`.
-- Store per-user stream state in persistent storage and extend TTL in hot paths.
-- Require auth at every layer that consumes an address authority.
-- Use `i128` for token amounts and reject negative values.
-- Use the Stellar Asset Contract for USDC instead of a custom token.
+## Commands
+
+```sh
+cargo test
+stellar contract build
+```
