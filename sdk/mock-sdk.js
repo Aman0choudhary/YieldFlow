@@ -43,6 +43,8 @@ const state = {
   }
 };
 
+const txStatuses = new Map();
+
 const getAccruedYield = () => {
   const elapsedSeconds = Math.max(0, (Date.now() - state.vault.yieldStartedAt) / 1000);
   return roundMoney(state.vault.yieldPrincipal * MOCK_APY * (elapsedSeconds / SECONDS_PER_YEAR));
@@ -107,8 +109,17 @@ export async function depositPayroll(amount) {
   state.vault.bufferBalance = roundMoney(state.vault.bufferBalance + bufferAllocated);
   state.vault.yieldPrincipal = roundMoney(state.vault.yieldPrincipal + yieldAllocated);
 
+  const txId = makeTxId("deposit");
+  txStatuses.set(txId, "pending");
+  setTimeout(() => {
+    if (txStatuses.get(txId) === "pending") {
+      txStatuses.set(txId, "confirmed");
+    }
+  }, 2200);
+
   return {
-    txId: makeTxId("deposit"),
+    txId,
+    txHash: txId,
     status: "success",
     token: TOKEN,
     amount: roundMoney(numericAmount),
@@ -156,6 +167,11 @@ export async function loginEmployee() {
   };
 }
 
+export async function restoreEmployeeSession() {
+  await wait(150);
+  return { employeeId: null };
+}
+
 export async function getEmployeeBalance(employeeId) {
   await wait(150);
   return toEmployeeBalance(getEmployee(employeeId));
@@ -183,8 +199,17 @@ export async function withdraw(employeeId) {
   state.vault.bufferBalance = roundMoney(state.vault.bufferBalance - amountReceived);
   state.vault.withdrawalsTotal = roundMoney(state.vault.withdrawalsTotal + amountReceived);
 
+  const txId = makeTxId("withdraw");
+  txStatuses.set(txId, "pending");
+  setTimeout(() => {
+    if (txStatuses.get(txId) === "pending") {
+      txStatuses.set(txId, "confirmed");
+    }
+  }, 2400);
+
   return {
-    txId: makeTxId("withdraw"),
+    txId,
+    txHash: txId,
     status: "success",
     token: TOKEN,
     amountReceived: roundMoney(amountReceived),
@@ -193,13 +218,31 @@ export async function withdraw(employeeId) {
   };
 }
 
+export async function getTransactionStatus(txId) {
+  await wait(150);
+  return txStatuses.get(txId) ?? "confirmed";
+}
+
+export async function getActivity() {
+  await wait(150);
+  return [
+    { id: "act_1", kind: "deposit", label: "Payroll deposit", timestamp: "Today, 09:41", amount: "+50,000 USDC" },
+    { id: "act_2", kind: "stream", label: "Employee streams settled", timestamp: "Today, 00:00", amount: "-1,250 USDC" },
+    { id: "act_3", kind: "yield", label: "Yield harvested", timestamp: "Yesterday", amount: "+42.50 USDC" },
+    { id: "act_4", kind: "auth", label: "Passkey session restored", timestamp: "Yesterday", amount: "Employee" }
+  ];
+}
+
 export const sdk = {
   connectEmployer,
   depositPayroll,
   getEmployerStats,
+  restoreEmployeeSession,
   loginEmployee,
   getEmployeeBalance,
-  withdraw
+  withdraw,
+  getTransactionStatus,
+  getActivity
 };
 
 export default sdk;
