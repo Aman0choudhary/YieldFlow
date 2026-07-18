@@ -69,6 +69,8 @@ sdk.withdraw(id)
 - Generated SDK package dependencies are installed and both generated packages build locally.
 - `sdk/yieldflow-sdk.js` is now a configurable wrapper around those generated clients, with Passkey login still intentionally blocked.
 - `config/testnet-usdc.json` contains the existing Circle Stellar testnet USDC asset and derived SAC address.
+- `deployments/testnet.json` contains the deployed YieldFlow testnet contract IDs.
+- `scripts/live-api-server.js` runs a local bridge from the frontend to the deployed testnet contracts through Stellar CLI.
 
 ## Near-Term Build Order
 
@@ -76,7 +78,7 @@ sdk.withdraw(id)
 2. Add relayer/passkey integration around the withdrawal entrypoint.
 3. Add DeFindex/Blend routing once the local vault primitive is stable.
 4. Decide the browser/passkey signing shape for the final frontend-facing SDK.
-5. Deploy to testnet once Aman chooses/provides the token contract id.
+5. Replace the local CLI bridge with browser wallet/passkey signing once the hackathon demo needs a fully client-side transaction path.
 
 ## Decision Log
 
@@ -100,3 +102,13 @@ sdk.withdraw(id)
 - 2026-07-15: Verified existing Stellar testnet USDC asset activity, derived SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`, created test identities, and established employer/employee USDC trustlines.
 - 2026-07-15: Circle faucet funding requires manual browser/reCAPTCHA action for `employer-test`.
 - 2026-07-15: Blend testnet UI config uses a different USDC issuer than the requested Circle issuer, so no matching Blend testnet pool was confirmed for this asset.
+- 2026-07-18: Deployed YieldFlow contracts to Stellar testnet using `yieldflow-deployer`.
+- 2026-07-18: Fresh deployer/employer address is `GD2XEYNTQ4BWVK6ORZPHU625ZKRT2ICPDVSEXCDLPWCHHJXBPPMD6IJM`.
+- 2026-07-18: Streaming contract deployed at `CAFCD3TBDN5DQA5URIHJXEVZJLIJL7MMHI5KXSBLQLL4CZM2WZCEEBFU`.
+- 2026-07-18: Vault contract deployed at `CAK54ESAEOSJUZM473KCUJMMFYRYT6TVJYMGRCEXGTWSVH5SA3WZFE5B`.
+- 2026-07-18: Vault initialized with USDC SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` and 15/85 buffer/yield split.
+- 2026-07-18: Circle faucet funded the deployer/employer with `20 USDC`.
+- 2026-07-18: Live testnet smoke deposit succeeded for `10 USDC`; vault state became `1.5 USDC` buffer and `8.5 USDC` yield principal. Transaction: `f25f7d5cca33e4b87e24ad3034c97d1e60446f36f6b4b0170d1cf5700520635c`.
+- 2026-07-18: Created a live `5 USDC` employee stream over 1 day for `GBPDU4S2VIXMNW4VUZKNFHQ7CHAU2RZA7DGPY4K77CZFGK6LMESZWSL4`. Transaction: `61ea40e6d8324b34c6ba1536f9ae0d391bc6ebfd0c9c0b4374df6b30b1e21e50`.
+- 2026-07-18: Live withdrawal smoke test succeeded for `0.0001 USDC`; vault released `1000` base units, streaming recorded `withdrawn_amount=1000`, and employee USDC balance became `1000` base units. Transaction: `d6c1765f2a3965c49a6cdecf3fd279ab7b14abbd858e237a1b564f07e3936632`.
+- 2026-07-18: Connected the localhost frontend to the live testnet backend through `scripts/live-api-server.js` and `sdk/live-api-sdk.ts`. This is a local demo bridge that uses the funded CLI identity; production browser signing still needs Freighter/passkey integration.

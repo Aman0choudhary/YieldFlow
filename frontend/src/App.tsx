@@ -74,6 +74,8 @@ const initialNotifications: Array<{
   timestamp: number;
 }> = [];
 
+const payrollDepositAmount = "1";
+
 export default function App() {
   const [employer, setEmployer] = useState<EmployerConnection | null>(null);
   const [employee, setEmployee] = useState<EmployeeSession | null>(null);
@@ -235,13 +237,13 @@ export default function App() {
     setStatusMessage("Submitting payroll funding...");
 
     try {
-      const result = await depositPayroll("50,000");
+      const result = await depositPayroll(payrollDepositAmount);
       const nextStatus: TxStatus = result.status === "failed" ? "failed" : "pending";
       const nextTx = {
         txHash: result.txHash,
         status: nextStatus,
         kind: "deposit" as const,
-        amount: "$50,000",
+        amount: `$${payrollDepositAmount}`,
         startedAt: Date.now(),
       };
       setTransactionQueue((current) => [nextTx, ...current].slice(0, 5));
@@ -258,7 +260,7 @@ export default function App() {
             kind: "deposit",
             label: "Payroll deposit",
             timestamp: "Just now",
-            amount: "+50,000 USDC",
+            amount: `+${payrollDepositAmount} USDC`,
           } as ActivityItem,
           ...current,
         ].slice(0, 8));

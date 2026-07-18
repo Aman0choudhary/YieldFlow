@@ -1,2 +1,2 @@
 export * from "../../../sdk/types";
-export * from "../../../sdk/mock-sdk";
+export * from "../../../sdk/live-api-sdk";

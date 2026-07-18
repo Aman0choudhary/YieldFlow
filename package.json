@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "api": "node ./scripts/live-api-server.js",
     "check:sdk": "node ./scripts/check-sdk-contract.js",
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",

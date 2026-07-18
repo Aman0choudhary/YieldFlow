@@ -70,7 +70,7 @@ try {
     Pop-Location
 }
 
-$employerAddress = (Invoke-Stellar @("keys", "public-key", $SourceAccount))[0].Trim()
+$employerAddress = (@(Invoke-Stellar @("keys", "public-key", $SourceAccount)) | Select-Object -First 1).Trim()
 
 $streamingOutput = Invoke-Stellar @(
     "contract", "deploy",
