@@ -1,0 +1,102 @@
+# YieldFlow Context
+
+## Current Working Mode
+
+- Aman is the blockchain/integration owner and primary technical driver.
+- The 21-day timeline in `PLAN.md` is background only. We will build in the time available and prioritize a working MVP over calendar-perfect milestones.
+- Aditiya, if involved, should remain frontend-only and should consume a plain JavaScript SDK or mock SDK.
+- Codex should not implement or edit Aditiya/frontend work unless Aman explicitly asks.
+- If there is confusion or a decision that affects product direction, security, money movement, or team ownership, ask Aman before changing course.
+
+## Product Goal
+
+YieldFlow streams salaries to employees over time while allowing employers to earn DeFi yield on payroll funds that have not yet streamed.
+
+The MVP should prove this flow:
+
+1. Employer deposits test USDC.
+2. Vault splits funds between a liquid buffer and yield allocation.
+3. Employee balance unlocks over time.
+4. Employee logs in with passkey-based auth.
+5. Employee withdraws unlocked funds without paying gas.
+6. Employer can see pool, yield, and buffer status.
+
+## Architecture Approach
+
+The most important boundary is the SDK bridge layer.
+
+Frontend code should call normal JavaScript functions and receive normal JSON. It should not need to understand Soroban, Stellar, Passkey Kit, DeFindex, Blend, or relayers.
+
+Target SDK shape:
+
+```js
+sdk.connectEmployer()
+sdk.depositPayroll(amount)
+sdk.getEmployerStats()
+sdk.loginEmployee()
+sdk.getEmployeeBalance(id)
+sdk.withdraw(id)
+```
+
+## Implementation Principles
+
+- Build from the SDK contract inward: define SDK types and mock responses first, then wire real blockchain behavior behind the same interface.
+- Maintain the SDK boundary for frontend consumption, but do not build frontend UI in this workspace unless Aman explicitly asks.
+- Keep contracts small, testable, and demo-focused.
+- Prefer testnet-only assumptions for the MVP.
+- Avoid building phase-2 features such as bank off-ramp, multi-tenant support, or mainnet hardening until the core demo works.
+- Record important implementation choices here as they happen.
+
+## Current Workspace State
+
+- `PLAN.md` exists and contains the original project plan.
+- `context.md` is the living build log and decision record.
+- No valid git repository is currently initialized in this folder.
+- `sdk/mock-sdk.js` contains the frontend-ready mock SDK.
+- `sdk/yieldflow-sdk.js` contains the future real SDK surface with matching function names.
+- `docs/sdk-contract.md` documents the SDK response shapes.
+- `scripts/check-sdk-contract.js` verifies the mock SDK returns the expected shape.
+- `frontend/` was removed after Aman clarified that Codex should only do Aman-side work.
+- `contracts/` exists as a placeholder for Soroban contract work.
+- `contracts/contracts/streaming` implements stream accounting and has unit tests.
+- `contracts/contracts/vault` implements deposit split accounting and streaming-checked token releases.
+- `scripts/setup-testnet-identity.ps1` creates/funds a Stellar testnet identity if needed.
+- `scripts/deploy-testnet.ps1` builds, deploys, initializes both contracts, and writes `deployments/testnet.json`.
+- `scripts/generate-bindings.ps1` regenerates TypeScript/JavaScript bindings from the latest WASMs.
+- `scripts/deposit-payroll.ps1`, `scripts/create-demo-stream.ps1`, and `scripts/withdraw-demo.ps1` provide repeatable demo contract operations after deployment.
+- `docs/deployment.md` documents local verification and testnet deployment flow.
+- `sdk/generated/streaming` and `sdk/generated/vault` contain Stellar CLI-generated TypeScript bindings.
+- Generated SDK package dependencies are installed and both generated packages build locally.
+- `sdk/yieldflow-sdk.js` is now a configurable wrapper around those generated clients, with Passkey login still intentionally blocked.
+- `config/testnet-usdc.json` contains the existing Circle Stellar testnet USDC asset and derived SAC address.
+
+## Near-Term Build Order
+
+1. Scaffold Soroban contracts.
+2. Add relayer/passkey integration around the withdrawal entrypoint.
+3. Add DeFindex/Blend routing once the local vault primitive is stable.
+4. Decide the browser/passkey signing shape for the final frontend-facing SDK.
+5. Deploy to testnet once Aman chooses/provides the token contract id.
+
+## Decision Log
+
+- 2026-07-11: Aman said to ignore the strict 21-day schedule and proceed in whatever time is available.
+- 2026-07-11: Added this `context.md` file to track approach, decisions, and changes side by side with implementation.
+- 2026-07-11: Created the SDK-first foundation so frontend work can begin before blockchain integrations are complete.
+- 2026-07-11: Chose plain async JavaScript functions returning JSON as the boundary between UI and blockchain work.
+- 2026-07-11: Aman clarified that Codex should only do Aman's side of the work, not Aditiya/frontend work.
+- 2026-07-11: Removed the accidental `frontend/` scaffold and locked future Codex scope to contracts, SDK, integrations, scripts, and docs.
+- 2026-07-11: Initialized Stellar contract workspace using installed `stellar 26.0.0` CLI.
+- 2026-07-11: Implemented `streaming` contract with one active stream per employee, live unlocked balance, and withdrawal accounting.
+- 2026-07-11: Cargo initially resolved `ed25519-dalek 3.0.0`, which broke Soroban testutils; pinned the contract lockfile to `ed25519-dalek 2.2.0`.
+- 2026-07-11: Implemented `vault` contract for payroll deposits, 15/85 buffer/yield accounting, controlled buffer release, and rebalance accounting.
+- 2026-07-11: Connected `vault.release_buffer` to the streaming contract interface so token release records streamed withdrawal first.
+- 2026-07-11: Verified `stellar contract build` produces deployable WASMs for `streaming` and `vault`.
+- 2026-07-11: Added PowerShell scripts for testnet identity setup and two-contract deployment/initialization.
+- 2026-07-11: Generated Stellar TypeScript bindings from local WASMs under `sdk/generated/`.
+- 2026-07-11: Replaced the real SDK placeholder with a configurable wrapper around generated contract clients.
+- 2026-07-11: Installed and built generated `vault` and `streaming` SDK packages; import smoke test for `sdk/yieldflow-sdk.js` passes.
+- 2026-07-11: Added operational scripts for deposit, stream creation, and demo withdrawal against deployed contract ids.
+- 2026-07-15: Verified existing Stellar testnet USDC asset activity, derived SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`, created test identities, and established employer/employee USDC trustlines.
+- 2026-07-15: Circle faucet funding requires manual browser/reCAPTCHA action for `employer-test`.
+- 2026-07-15: Blend testnet UI config uses a different USDC issuer than the requested Circle issuer, so no matching Blend testnet pool was confirmed for this asset.
