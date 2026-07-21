@@ -10,7 +10,16 @@ async function ensureSdk() {
   if (stellarSdk) return;
   try {
     stellarSdk = await import("@stellar/stellar-sdk");
-    ({ Keypair, Contract, TransactionBuilder, rpc, Address, nativeToScVal, scValToNative } = stellarSdk);
+    // stellar-sdk v12+ exports rpc; older aliases used SorobanRpc
+    const rpcNs = stellarSdk.rpc || stellarSdk.SorobanRpc;
+    if (!rpcNs || !rpcNs.Server) {
+      throw new Error("@stellar/stellar-sdk missing rpc.Server export");
+    }
+    rpc = rpcNs;
+    ({ Keypair, Contract, TransactionBuilder, Address, nativeToScVal, scValToNative } = stellarSdk);
+    if (!Contract || !TransactionBuilder || !Keypair) {
+      throw new Error("@stellar/stellar-sdk missing core exports");
+    }
   } catch (err) {
     throw new Error(`Failed to load @stellar/stellar-sdk: ${err.message}`);
   }
