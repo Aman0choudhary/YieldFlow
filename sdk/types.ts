@@ -52,4 +52,57 @@ export type ActivityItem = {
   label: string;
   timestamp: string;
   amount: string;
+  status?: TxStatus;
+  txHash?: string;
+  counterparty?: string;
+  createdAt?: number;
+};
+
+export type ActivityFilterInput = {
+  kind?: ActivityItem["kind"] | "all";
+  status?: TxStatus | "all";
+  from?: string;
+  to?: string;
+  query?: string;
+};
+
+export type FlowNode = {
+  id: string;
+  label: string;
+  detail: string;
+  active: boolean;
+};
+
+export type DepositPreview = {
+  bufferShare: string;
+  yieldShare: string;
+  projectedApy: string;
+  bufferPercent: number;
+  yieldRoutePercent: number;
+};
+
+export type StreamPhysics = {
+  unlockedAmount: string;
+  lockedAmount: string;
+  ratePerSecond: string;
+  secondsToPayday: number;
+  bufferCoverageHours: number;
+  streamCap: string;
+  totalStreamed: string;
+  unlockedPercent: number;
+};
+
+export type TransactionStep = {
+  label: string;
+  at: string;
+  status: TxStatus;
+};
+
+export type TransactionDetail = {
+  status: TxStatus;
+  steps: TransactionStep[];
+  amount: string;
+  kind: string;
+  txHash: string;
+  explorerUrl: string;
 };

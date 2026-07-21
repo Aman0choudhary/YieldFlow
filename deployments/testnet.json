@@ -1,0 +1,15 @@
+﻿{
+  "network": "testnet",
+  "updatedAt": null,
+  "contracts": {
+    "vault": null,
+    "streaming": null,
+    "defindex_router": null
+  },
+  "wasm": {
+    "vault": null,
+    "streaming": null,
+    "defindex_router": null
+  },
+  "notes": "Created by deploy-testnet.ps1 when stellar CLI is available."
+}

@@ -1,14 +1,40 @@
-# YieldFlow SDK Contract
+﻿# YieldFlow SDK contract (UI ↔ chain boundary)
 
-The frontend should import from `sdk/mock-sdk.js` until the real Soroban-backed implementation in `sdk/yieldflow-sdk.js` is ready.
+Frontend must import only the SDK surface and never call Stellar RPC, Smart Account Kit,
+Passkey Kit, OpenZeppelin Relayer, DeFindex, Blend, or contract clients directly.
 
-All functions are async and return plain JSON.
+There are two closely related entry points during the dual-path MVP:
 
-The real SDK wrapper now depends on generated Stellar bindings in `sdk/generated/`. Those generated packages must be built before `sdk/yieldflow-sdk.js` can talk to deployed contracts.
+| Path | Entry | Status |
+|---|---|---|
+| Frontend demo (Vite) | `sdk/yieldflow-sdk.ts` → mock or stellar TS surface | mock default |
+| Integration / generated clients | `sdk/yieldflow-sdk.js` + `sdk/generated/*` | Aman path |
+| Day-1 mock (JS) | `sdk/mock-sdk.js` | shape checks via `scripts/check-sdk-contract.js` |
 
-## `connectEmployer()`
+All functions are async and return plain JSON / serializable objects.
 
-Connects the employer wallet.
+## Mode selection (frontend TS)
+
+| Env | Behavior |
+|---|---|
+| `VITE_YIELDFLOW_SDK=mock` (default) | `sdk/mock-sdk.ts` |
+| `VITE_YIELDFLOW_SDK=stellar` | `sdk/stellar-sdk.ts` only if contract IDs are set in `sdk/config.ts`; otherwise falls back to mock with console warning |
+
+Helpers: `getSdkMeta()` / `getSdkInfo()`.
+
+The real JS SDK wrapper depends on generated Stellar bindings in `sdk/generated/`. Those packages must be built before `sdk/yieldflow-sdk.js` can talk to deployed contracts.
+
+## Rules
+
+- Prefer **string amounts** on the frontend TS boundary for display safety.
+- USDC on Stellar is 7 decimals; UI must not hard-code protocol math beyond display.
+- Transactions expose lifecycle: `idle | authenticating | building | submitted | pending | confirmed | failed`.
+- SDK changes are breaking unless coordinated.
+- Activity history (frontend mock): **SDK is source of truth**; UI reloads via `getActivity` and patches status from polling.
+
+## Core JS shapes (integration mock / real wrapper)
+
+### `connectEmployer()`
 
 ```js
 {
@@ -18,9 +44,7 @@ Connects the employer wallet.
 }
 ```
 
-## `depositPayroll(amount)`
-
-Deposits test USDC into the vault and splits it between buffer and yield allocation.
+### `depositPayroll(amount)`
 
 ```js
 {
@@ -34,9 +58,7 @@ Deposits test USDC into the vault and splits it between buffer and yield allocat
 }
 ```
 
-## `getEmployerStats()`
-
-Returns employer-facing vault and yield data.
+### `getEmployerStats()`
 
 ```js
 {
@@ -57,9 +79,7 @@ Returns employer-facing vault and yield data.
 }
 ```
 
-## `loginEmployee()`
-
-Starts passkey login. The mock resolves immediately; the real SDK should open the passkey prompt internally.
+### `loginEmployee()`
 
 ```js
 {
@@ -71,9 +91,7 @@ Starts passkey login. The mock resolves immediately; the real SDK should open th
 }
 ```
 
-## `getEmployeeBalance(employeeId)`
-
-Returns the streamed balance state for one employee.
+### `getEmployeeBalance(employeeId)`
 
 ```js
 {
@@ -90,9 +108,7 @@ Returns the streamed balance state for one employee.
 }
 ```
 
-## `withdraw(employeeId)`
-
-Withdraws unlocked funds using the relayer in the real implementation.
+### `withdraw(employeeId)`
 
 ```js
 {
@@ -104,3 +120,38 @@ Withdraws unlocked funds using the relayer in the real implementation.
   withdrawnAt: "2026-07-11T00:00:00.000Z"
 }
 ```
+
+## Frontend TypeScript surface (mock-first demo)
+
+```ts
+connectEmployer(): Promise<EmployerConnection>
+depositPayroll(amount: string): Promise<DepositPayrollResult>
+getEmployerStats(): Promise<EmployerStats>
+restoreEmployeeSession(): Promise<{ employeeId: string | null }>
+loginEmployee(): Promise<EmployeeSession>
+getEmployeeBalance(employeeId: string): Promise<EmployeeBalance>
+withdraw(employeeId: string): Promise<WithdrawResult>
+getTransactionStatus(txHash: string): Promise<TxStatus>
+getActivity(filter?: ActivityFilterInput): Promise<ActivityItem[]>
+previewDeposit(amount: string): Promise<DepositPreview>
+getStreamPhysics(employeeId: string): Promise<StreamPhysics>
+getFlowGraph(): Promise<FlowNode[]>
+getTransactionDetail(txHash: string): Promise<TransactionDetail>
+resetDemo(): Promise<void>
+getSdkMeta(): SdkMeta
+getSdkInfo(): Promise<SdkMeta>
+```
+
+## Phase 3 swap path
+
+1. Deploy `vault`, `streaming`, `defindex_router` (`npm run deploy:testnet`).
+2. Write contract IDs to `deployments/testnet.json`, `config/testnet-usdc.json`, `sdk/config.ts`.
+3. Implement RPC invokes inside `sdk/stellar-sdk.ts` (and keep `sdk/yieldflow-sdk.js` aligned).
+4. Set `VITE_YIELDFLOW_SDK=stellar` and rebuild the frontend.
+5. Keep passkey optional with mock fallback for demos.
+
+## Notes
+
+- Mock `getActivity` (TS) persists runtime deposits/withdrawals/auth in `localStorage`.
+- Passkey is simulated in mock.
+- UI never imports stellar clients directly.

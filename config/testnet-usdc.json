@@ -1,9 +1,18 @@
-{
+﻿{
   "network": "testnet",
+  "horizonUrl": "https://horizon-testnet.stellar.org",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "networkPassphrase": "Test SDF Network ; September 2015",
   "asset_code": "USDC",
   "asset_issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
   "token_contract_id": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   "source": "existing Stellar testnet USDC",
+  "contracts": {
+    "vault": null,
+    "streaming": null,
+    "defindex_router": null,
+    "note": "Filled by scripts/deploy-testnet.ps1 into deployments/testnet.json and mirrored here"
+  },
   "accounts": {
     "deployer": {
       "alias": "yieldflow-deployer",
@@ -40,5 +49,10 @@
   "blend_testnet": {
     "matching_pool_for_this_usdc_issuer_found": false,
     "reason": "Blend UI testnet config references NEXT_PUBLIC_USDC_ISSUER=GATALTGTWIOT6BUDBCZM3Q4OQ4BO2COLOAZ7IYSKPLC2PMSOPPGF5V56, not the Circle issuer GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5."
+  },
+  "sdk": {
+    "defaultMode": "mock",
+    "envFlag": "VITE_YIELDFLOW_SDK",
+    "values": ["mock", "stellar"]
   }
 }

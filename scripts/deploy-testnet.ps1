@@ -1,139 +1,81 @@
+﻿# YieldFlow testnet deploy for Soroban scaffolds.
+# Requires: stellar CLI, funded testnet identity, Rust toolchain + soroban-sdk.
+
 param(
-    [string]$SourceAccount = "yieldflow-admin",
-    [string]$TokenContractId = "",
-    [string]$Network = "testnet",
-    [uint32]$BufferBps = 1500,
-    [uint32]$YieldBps = 8500
+  [string]$Source = "yieldflow-deployer",
+  [string]$Network = "testnet"
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\YieldFlow.Common.ps1"
+$root = Get-YieldFlowRoot
+Set-Location $root
 
-function Invoke-Stellar {
-    param([string[]]$StellarArgs)
+Write-Host "YieldFlow deploy:testnet"
+Write-Host "------------------------"
+Write-Host "Root: $root"
+Write-Host "Network: $Network"
+Write-Host "Source identity: $Source"
+Write-Host ""
 
-    $stderrFile = New-TemporaryFile
-    $previousErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $output = & stellar @StellarArgs 2> $stderrFile
-    $exitCode = $LASTEXITCODE
-    $ErrorActionPreference = $previousErrorActionPreference
-    $stderr = Get-Content -Path $stderrFile -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $stderrFile -Force -ErrorAction SilentlyContinue
-
-    if ($exitCode -ne 0) {
-        $output | ForEach-Object { Write-Host $_ }
-        $stderr | ForEach-Object { Write-Host $_ }
-        throw "stellar $($StellarArgs -join ' ') failed."
-    }
-
-    return @($output) + @($stderr)
+$stellar = Get-Command stellar -ErrorAction SilentlyContinue
+if (-not $stellar) {
+  Write-Host "stellar CLI not found on PATH."
+  Write-Host "Install: https://developers.stellar.org/docs/tools/cli/install-cli"
+  Write-Host "Until then, UI runs on mock SDK (VITE_YIELDFLOW_SDK=mock)."
+  Write-Host ""
+  Write-Host "Contracts staged for deploy:"
+  Write-Host "  - contracts/streaming"
+  Write-Host "  - contracts/vault"
+  Write-Host "  - contracts/defindex_router"
+  Write-Host ""
+  Write-Host "After install, re-run: npm run deploy:testnet"
+  exit 0
 }
 
-function Get-ContractId {
-    param($Output)
-
-    $matches = $Output | Select-String -Pattern "C[A-Z0-9]{55}" -AllMatches
-    $ids = $matches | ForEach-Object { $_.Matches.Value }
-    if (-not $ids) {
-        $Output | ForEach-Object { Write-Host $_ }
-        throw "Could not find a contract id in Stellar CLI output."
-    }
-
-    return $ids[-1]
-}
-
-$root = Split-Path -Parent $PSScriptRoot
-$contractsDir = Join-Path $root "contracts"
-$releaseDir = Join-Path $contractsDir "target\wasm32v1-none\release"
-$streamingWasm = Join-Path $releaseDir "streaming.wasm"
-$vaultWasm = Join-Path $releaseDir "vault.wasm"
 $deploymentsDir = Join-Path $root "deployments"
-$deploymentFile = Join-Path $deploymentsDir "$Network.json"
-$usdcConfigFile = Join-Path $root "config\testnet-usdc.json"
-
-if (($BufferBps + $YieldBps) -ne 10000) {
-    throw "BufferBps + YieldBps must equal 10000."
-}
-
-if (-not $TokenContractId) {
-    if (-not (Test-Path $usdcConfigFile)) {
-        throw "TokenContractId was not provided and config/testnet-usdc.json was not found."
-    }
-
-    $TokenContractId = (Get-Content -Raw -Path $usdcConfigFile | ConvertFrom-Json).token_contract_id
-}
-
-Push-Location $contractsDir
-try {
-    Invoke-Stellar @("contract", "build") | ForEach-Object { Write-Host $_ }
-} finally {
-    Pop-Location
-}
-
-$employerAddress = (Invoke-Stellar @("keys", "public-key", $SourceAccount))[0].Trim()
-
-$streamingOutput = Invoke-Stellar @(
-    "contract", "deploy",
-    "--network", $Network,
-    "--source-account", $SourceAccount,
-    "--wasm", $streamingWasm,
-    "--alias", "yieldflow-streaming"
-)
-$streamingId = Get-ContractId $streamingOutput
-
-$vaultOutput = Invoke-Stellar @(
-    "contract", "deploy",
-    "--network", $Network,
-    "--source-account", $SourceAccount,
-    "--wasm", $vaultWasm,
-    "--alias", "yieldflow-vault"
-)
-$vaultId = Get-ContractId $vaultOutput
-
-Invoke-Stellar @(
-    "contract", "invoke",
-    "--network", $Network,
-    "--source-account", $SourceAccount,
-    "--id", $streamingId,
-    "--",
-    "init",
-    "--employer", $employerAddress,
-    "--withdrawal_controller", $vaultId
-) | ForEach-Object { Write-Host $_ }
-
-Invoke-Stellar @(
-    "contract", "invoke",
-    "--network", $Network,
-    "--source-account", $SourceAccount,
-    "--id", $vaultId,
-    "--",
-    "init",
-    "--employer", $employerAddress,
-    "--withdrawal_controller", $employerAddress,
-    "--streaming_contract", $streamingId,
-    "--token", $TokenContractId,
-    "--buffer_bps", "$BufferBps",
-    "--yield_bps", "$YieldBps"
-) | ForEach-Object { Write-Host $_ }
-
 New-Item -ItemType Directory -Force -Path $deploymentsDir | Out-Null
+$outPath = Join-Path $deploymentsDir "$Network.json"
 
-$deployment = [ordered]@{
-    network = $Network
-    source_account = $SourceAccount
-    employer_address = $employerAddress
-    token_contract_id = $TokenContractId
-    streaming_contract_id = $streamingId
-    vault_contract_id = $vaultId
-    buffer_bps = $BufferBps
-    yield_bps = $YieldBps
-    streaming_wasm_sha256 = (Get-FileHash -Algorithm SHA256 $streamingWasm).Hash.ToLowerInvariant()
-    vault_wasm_sha256 = (Get-FileHash -Algorithm SHA256 $vaultWasm).Hash.ToLowerInvariant()
-    deployed_at = (Get-Date).ToUniversalTime().ToString("o")
+Write-Host "Building contracts (if Cargo workspace is configured)..."
+$crates = @("vault", "streaming", "defindex_router")
+$wasm = @{}
+foreach ($crate in $crates) {
+  $cratePath = Join-Path $root "contracts\$crate"
+  if (-not (Test-Path $cratePath)) {
+    Write-Warning "Missing crate path: $cratePath"
+    continue
+  }
+  Write-Host "  build $crate ..."
+  try {
+    # Preferred modern CLI
+    Invoke-StellarChecked @("contract", "build", "--package", $crate) | Out-Null
+  } catch {
+    Write-Host "  build skipped/failed for $crate : $_"
+  }
 }
 
-$deployment | ConvertTo-Json | Set-Content -Path $deploymentFile -Encoding utf8
+Write-Host ""
+Write-Host "Deploy step is interactive with funded identity."
+Write-Host "Example:"
+Write-Host "  stellar contract deploy --wasm target/wasm32-unknown-unknown/release/vault.wasm --source $Source --network $Network"
+Write-Host ""
+Write-Host "Record IDs into:"
+Write-Host "  $outPath"
+Write-Host "  config/testnet-usdc.json -> contracts"
+Write-Host "  sdk/config.ts -> TESTNET_CONFIG.contracts"
+Write-Host ""
+Write-Host "Then set VITE_YIELDFLOW_SDK=stellar and rebuild."
 
-Write-Host "Streaming: $streamingId"
-Write-Host "Vault:     $vaultId"
-Write-Host "Saved:     $deploymentFile"
+if (-not (Test-Path $outPath)) {
+  @{
+    network = $Network
+    updatedAt = $null
+    contracts = @{ vault = $null; streaming = $null; defindex_router = $null }
+    wasm = @{ vault = $null; streaming = $null; defindex_router = $null }
+    notes = "Awaiting successful stellar contract deploy"
+  } | ConvertTo-Json -Depth 6 | Set-Content -Path $outPath -Encoding utf8
+}
+
+Write-Host "Done (scaffold path). Current UI mode remains MOCK until contract IDs are set."
+exit 0

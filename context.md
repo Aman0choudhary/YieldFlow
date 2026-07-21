@@ -1,11 +1,11 @@
-# YieldFlow Context
+﻿# YieldFlow Context
 
 ## Current Working Mode
 
 - Aman is the blockchain/integration owner and primary technical driver.
 - The 21-day timeline in `PLAN.md` is background only. We will build in the time available and prioritize a working MVP over calendar-perfect milestones.
-- Aditiya, if involved, should remain frontend-only and should consume a plain JavaScript SDK or mock SDK.
-- Codex should not implement or edit Aditiya/frontend work unless Aman explicitly asks.
+- Aditiya owns frontend work and should consume a plain JavaScript / TypeScript SDK or mock SDK.
+- Codex should not implement or edit Aditiya/frontend work unless Aman explicitly asks (frontend branch work below was done on `frontend-aditya` by request).
 - If there is confusion or a decision that affects product direction, security, money movement, or team ownership, ask Aman before changing course.
 
 ## Product Goal
@@ -38,45 +38,45 @@ sdk.getEmployeeBalance(id)
 sdk.withdraw(id)
 ```
 
+Frontend TypeScript demo path (mock-first) also exposes activity / preview / stream physics helpers via `sdk/yieldflow-sdk.ts` with mode `VITE_YIELDFLOW_SDK=mock|stellar`.
+
 ## Implementation Principles
 
 - Build from the SDK contract inward: define SDK types and mock responses first, then wire real blockchain behavior behind the same interface.
-- Maintain the SDK boundary for frontend consumption, but do not build frontend UI in this workspace unless Aman explicitly asks.
 - Keep contracts small, testable, and demo-focused.
 - Prefer testnet-only assumptions for the MVP.
 - Avoid building phase-2 features such as bank off-ramp, multi-tenant support, or mainnet hardening until the core demo works.
 - Record important implementation choices here as they happen.
+- Frontend tab ownership: Dashboard = health, Flows = operate pipeline, Activity = audit ledger.
 
 ## Current Workspace State
 
 - `PLAN.md` exists and contains the original project plan.
 - `context.md` is the living build log and decision record.
-- No valid git repository is currently initialized in this folder.
-- `sdk/mock-sdk.js` contains the frontend-ready mock SDK.
-- `sdk/yieldflow-sdk.js` contains the future real SDK surface with matching function names.
-- `docs/sdk-contract.md` documents the SDK response shapes.
+- `sdk/mock-sdk.js` / `sdk/mock-sdk.ts` contain frontend-ready mock SDK surfaces.
+- `sdk/yieldflow-sdk.js` is a configurable wrapper around generated contract clients (Aman path).
+- `sdk/yieldflow-sdk.ts` is the Vite frontend entry with mock/stellar mode switch.
+- `docs/sdk-contract.md` documents the SDK response shapes and mode selection.
 - `scripts/check-sdk-contract.js` verifies the mock SDK returns the expected shape.
-- `frontend/` was removed after Aman clarified that Codex should only do Aman-side work.
-- `contracts/` exists as a placeholder for Soroban contract work.
-- `contracts/contracts/streaming` implements stream accounting and has unit tests.
-- `contracts/contracts/vault` implements deposit split accounting and streaming-checked token releases.
+- `frontend/` is the YieldFlow demo UI (Vite + React + TypeScript) on branch `frontend-aditya`.
+- `contracts/` holds the Soroban workspace (`contracts/contracts/streaming`, `contracts/contracts/vault`) plus additional Phase 3 scaffold crates where present.
 - `scripts/setup-testnet-identity.ps1` creates/funds a Stellar testnet identity if needed.
-- `scripts/deploy-testnet.ps1` builds, deploys, initializes both contracts, and writes `deployments/testnet.json`.
+- `scripts/deploy-testnet.ps1` builds/deploys contracts when stellar CLI is available.
 - `scripts/generate-bindings.ps1` regenerates TypeScript/JavaScript bindings from the latest WASMs.
 - `scripts/deposit-payroll.ps1`, `scripts/create-demo-stream.ps1`, and `scripts/withdraw-demo.ps1` provide repeatable demo contract operations after deployment.
 - `docs/deployment.md` documents local verification and testnet deployment flow.
 - `sdk/generated/streaming` and `sdk/generated/vault` contain Stellar CLI-generated TypeScript bindings.
-- Generated SDK package dependencies are installed and both generated packages build locally.
-- `sdk/yieldflow-sdk.js` is now a configurable wrapper around those generated clients, with Passkey login still intentionally blocked.
 - `config/testnet-usdc.json` contains the existing Circle Stellar testnet USDC asset and derived SAC address.
+- `deployments/testnet.json` records deployed contract IDs when available.
 
 ## Near-Term Build Order
 
-1. Scaffold Soroban contracts.
+1. Scaffold / harden Soroban contracts (streaming + vault).
 2. Add relayer/passkey integration around the withdrawal entrypoint.
 3. Add DeFindex/Blend routing once the local vault primitive is stable.
 4. Decide the browser/passkey signing shape for the final frontend-facing SDK.
 5. Deploy to testnet once Aman chooses/provides the token contract id.
+6. Point `VITE_YIELDFLOW_SDK=stellar` at live RPC once contract IDs are written into config.
 
 ## Decision Log
 
@@ -84,8 +84,7 @@ sdk.withdraw(id)
 - 2026-07-11: Added this `context.md` file to track approach, decisions, and changes side by side with implementation.
 - 2026-07-11: Created the SDK-first foundation so frontend work can begin before blockchain integrations are complete.
 - 2026-07-11: Chose plain async JavaScript functions returning JSON as the boundary between UI and blockchain work.
-- 2026-07-11: Aman clarified that Codex should only do Aman's side of the work, not Aditiya/frontend work.
-- 2026-07-11: Removed the accidental `frontend/` scaffold and locked future Codex scope to contracts, SDK, integrations, scripts, and docs.
+- 2026-07-11: Aman clarified that Codex should only do Aman's side of the work, not Aditiya/frontend work (unless explicitly requested).
 - 2026-07-11: Initialized Stellar contract workspace using installed `stellar 26.0.0` CLI.
 - 2026-07-11: Implemented `streaming` contract with one active stream per employee, live unlocked balance, and withdrawal accounting.
 - 2026-07-11: Cargo initially resolved `ed25519-dalek 3.0.0`, which broke Soroban testutils; pinned the contract lockfile to `ed25519-dalek 2.2.0`.
@@ -100,3 +99,38 @@ sdk.withdraw(id)
 - 2026-07-15: Verified existing Stellar testnet USDC asset activity, derived SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`, created test identities, and established employer/employee USDC trustlines.
 - 2026-07-15: Circle faucet funding requires manual browser/reCAPTCHA action for `employer-test`.
 - 2026-07-15: Blend testnet UI config uses a different USDC issuer than the requested Circle issuer, so no matching Blend testnet pool was confirmed for this asset.
+
+---
+
+## Frontend branch log (`frontend-aditya`)
+
+### 2026-07-17 — UI animations + alignment polish
+
+- Integrated premium motion/microinteractions without redesigning layout.
+- Files: `frontend/src/App.tsx`, `frontend/src/animation-utils.ts`, `frontend/src/styles.css`.
+- Verify: `npm --prefix frontend run build` passed.
+
+### 2026-07-19 — Multi-page Dashboard / Flows / Activity
+
+- Wired top nav to real page state for Dashboard / Flows / Activity.
+- Files: `frontend/src/App.tsx`, `frontend/src/styles.css`.
+
+### 2026-07-21 — Phase 0a + 0: extraction & IA cleanup
+
+- Shell `App.tsx` + hooks + page components; exclusive tab ownership; hash routes; a11y basics.
+- Files: `frontend/src/App.tsx`, pages, hooks, styles.
+
+### 2026-07-21 — Phase 1 & 2: Flows/Activity depth + trust UI
+
+- Confirm dialog, activity ledger polish, status badges, fund wizard, hop timeline, detail drawer, CSV export.
+- Activity integrity: SDK is source of truth; UI reloads via `getActivity`; no duplicate confirm rows.
+- Receipt dialog after deposit/withdraw submit.
+
+### 2026-07-21 — Phase 3 readiness + Phase 4 polish
+
+- `sdk/config.ts`, stellar mode surface, mock/stellar swap with fallback.
+- Contract scaffolds + deploy/verify/demo-reset scripts.
+- Health strip, settings panel with demo reset, Escape/a11y polish.
+- Build: `npm --prefix frontend run build` passes.
+- Structural: `npm run verify:demo` passes.
+- Default runtime remains **mock** until contract IDs + RPC are live.

@@ -1,590 +1,455 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Activity,
-  ArrowDownRight,
-  ArrowUpRight,
-  CheckCircle2,
-  Clock3,
-  Layers,
-  Loader2,
-  Sparkles,
-  Wallet,
-  ShieldCheck,
-} from "lucide-react";
-import {
-  connectEmployer,
   depositPayroll,
   getActivity,
-  getEmployeeBalance,
   getEmployerStats,
-  getTransactionStatus,
-  loginEmployee,
-  restoreEmployeeSession,
+  getSdkMeta,
+  resetDemo,
   withdraw,
 } from "./sdk/yieldflow-sdk";
-import type {
-  ActivityItem,
-  EmployeeBalance,
-  EmployeeSession,
-  EmployerStats,
-  EmployerConnection,
-  TxStatus,
-} from "./sdk/yieldflow-sdk";
-import { useAnimatedNumber, formatRelativeTime } from "./animation-utils";
+import type { TxStatus } from "./sdk/yieldflow-sdk";
+import { useRipple, formatRelativeTime } from "./animation-utils";
+import { Settings2 } from "lucide-react";
 
-const kindIcons = {
-  deposit: ArrowUpRight,
-  withdraw: ArrowDownRight,
-  stream: Layers,
-  yield: Sparkles,
-  auth: Wallet,
-} as const;
+import { useSession } from "./hooks/useSession";
+import { useStats } from "./hooks/useStats";
+import { useStreamBalance } from "./hooks/useStreamBalance";
+import { useTransactions } from "./hooks/useTransactions";
+import { useActivity } from "./hooks/useActivity";
+import { useNotifications } from "./hooks/useNotifications";
 
-const kindLabel: Record<ActivityItem['kind'], string> = {
-  deposit: "Payroll deposit",
-  withdraw: "Withdraw settled",
-  stream: "Employee stream",
-  yield: "Yield harvested",
-  auth: "Passkey restored",
-};
+import Dashboard from "./pages/Dashboard";
+import Flows from "./pages/Flows";
+import ActivityPage from "./pages/Activity";
+import { ConfirmDialog } from "./components/ConfirmDialog";
+import { ReceiptDialog, type ReceiptData } from "./components/ReceiptDialog";
+import { HealthStrip } from "./components/HealthStrip";
+import { SettingsPanel } from "./components/SettingsPanel";
 
-const formatMoney = (value: number, digits = 2) =>
-  value.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
+import type { AppPage, QueuedTx } from "./types";
+import { navItems, pageCopy, parseHashPage, pageToHash } from "./utils";
 
-const shortAddress = (address: string) =>
-  `${address.slice(0, 8)}...${address.slice(-6)}`;
-
-const toastStyle = {
-  deposit: "info",
-  withdraw: "warning",
-  confirmed: "success",
-  failed: "error",
-} as const;
-
-const initialNotifications: Array<{
-  id: string;
-  title: string;
-  message: string;
-  type: "info" | "success" | "error";
-  timestamp: number;
-}> = [];
+type PendingConfirm = {
+  type: "deposit" | "withdraw";
+  amount: string;
+} | null;
 
 export default function App() {
-  const [employer, setEmployer] = useState<EmployerConnection | null>(null);
-  const [employee, setEmployee] = useState<EmployeeSession | null>(null);
-  const [balance, setBalance] = useState<EmployeeBalance | null>(null);
-  const [stats, setStats] = useState<EmployerStats | null>(null);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  /* -- routing -- */
+  const [page, setPage] = useState<AppPage>(
+    () => parseHashPage(window.location.hash) ?? "dashboard",
+  );
+  const mainRef = useRef<HTMLElement>(null);
+
+  const navigate = useCallback((next: AppPage) => {
+    setPage(next);
+    window.location.hash = pageToHash(next);
+    mainRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => {
+      const target = parseHashPage(window.location.hash);
+      if (target) setPage(target);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  /* -- shared hooks -- */
+  const { notifications, addNotification } = useNotifications();
+  const {
+    activity, setActivity, activityFilter, setActivityFilter,
+    statusFilter, setStatusFilter, searchQuery, setSearchQuery,
+    expandedActivityId, setExpandedActivityId, detailItem, setDetailItem,
+    filteredActivity, reloadActivity, exportCsv, patchActivityStatus,
+  } = useActivity();
+  const {
+    employer, employee, balance, authenticating,
+    initEmployer, restoreSession, handleLogin, refreshBalance, clearSession,
+  } = useSession(addNotification, reloadActivity);
+  const { stats, setStats, displayStats } = useStats();
+  const { liveBalance, streamProgress } = useStreamBalance(balance);
+  const { transactionQueue, activeTx, queueTransaction } = useTransactions(
+    employee?.employeeId ?? null,
+    addNotification,
+    refreshBalance,
+    setStats,
+    patchActivityStatus,
+    reloadActivity,
+  );
+
+  /* -- boot / shell -- */
+  const [booting, setBooting] = useState(true);
   const [statusMessage, setStatusMessage] = useState("Ready to flow capital.");
-  const [authenticating, setAuthenticating] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("50000");
   const [depositing, setDepositing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
-  const [transactionQueue, setTransactionQueue] = useState<{
-    txHash: string;
-    status: TxStatus;
-    kind: "deposit" | "withdraw";
-    amount: string;
-    startedAt: number;
-  }[]>([]);
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const [liveTarget, setLiveTarget] = useState(0);
-  
-  const activeTx = transactionQueue.find((tx) => tx.status === "pending" || tx.status === "submitted");
-
-  const liveBalance = useAnimatedNumber(liveTarget, 500);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const sdkMeta = getSdkMeta();
+  const networkLabel = sdkMeta.mode === "mock" ? "Mock local" : "Stellar Testnet";
+  const ripple = useRipple();
 
   useEffect(() => {
     const init = async () => {
       try {
         setStatusMessage("Booting yield engine...");
-        const [connection, statsResponse, activityResponse] = await Promise.all([
-          connectEmployer(),
+        const [, statsRes, activityRes] = await Promise.all([
+          initEmployer(),
           getEmployerStats(),
           getActivity(),
         ]);
-
-        setEmployer(connection);
-        setStats(statsResponse);
-        setActivity(activityResponse);
-
-        const restore = await restoreEmployeeSession();
-        if (restore.employeeId) {
-          setEmployee({
-            employeeId: restore.employeeId,
-            name: "Aditiya Sharma",
-            walletAddress: "CCONTRACT...PASSKEY...YF01",
-          });
-          const nextBalance = await getEmployeeBalance(restore.employeeId);
-          setBalance(nextBalance);
-        }
-
-        setStatusMessage("Ready to flow capital.");
+        setStats(statsRes);
+        setActivity(activityRes);
+        await restoreSession();
+        setStatusMessage(
+          sdkMeta.mode === "mock"
+            ? "Ready to flow capital (mock)."
+            : "Ready to flow capital (stellar).",
+        );
       } catch (error) {
         console.error(error);
         setStatusMessage("Unable to initialize. Refresh to retry.");
+      } finally {
+        setBooting(false);
       }
     };
-
     void init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* -- keyboard: Escape closes overlays -- */
   useEffect(() => {
-    if (!balance) {
-      setLiveTarget(0);
-      return;
-    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setPendingConfirm(null);
+      setReceipt(null);
+      setSettingsOpen(false);
+      setDetailItem(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setDetailItem]);
 
-    const base = parseFloat(balance.unlockedAmount);
-    const rate = parseFloat(balance.ratePerSecond);
-    const startTime = Date.now();
-    setLiveTarget(base);
-
-    const timer = window.setInterval(() => {
-      const elapsed = (Date.now() - startTime) / 1000;
-      setLiveTarget(base + elapsed * rate);
-    }, 280);
-
-    return () => window.clearInterval(timer);
-  }, [balance]);
-
-  useEffect(() => {
-    if (!transactionQueue.some((tx) => tx.status === "pending")) {
-      return;
-    }
-
-    const poll = window.setInterval(() => {
-      transactionQueue.forEach(async (tx) => {
-        if (tx.status !== "pending") return;
-        const status = await getTransactionStatus(tx.txHash);
-        if (status === tx.status) return;
-
-        setTransactionQueue((current) =>
-          current.map((item) => (item.txHash === tx.txHash ? { ...item, status } : item)),
-        );
-
-        if (status === "confirmed") {
-          addNotification(`Transaction confirmed`, "success");
-          setStatusMessage("Transaction confirmed. Yield is live.");
-          if (employee) {
-            const refreshed = await getEmployeeBalance(employee.employeeId);
-            setBalance(refreshed);
-          }
-        }
-
-        if (status === "failed") {
-          addNotification(`Transaction failed`, "error");
-          setStatusMessage("Transaction failed. Try again.");
-        }
-      });
-    }, 1800);
-
-    return () => window.clearInterval(poll);
-  }, [transactionQueue, employee]);
-
-  useEffect(() => {
-    if (!notifications.length) return;
-    const timer = window.setTimeout(() => {
-      setNotifications((current) => current.slice(1));
-    }, 4200);
-    return () => window.clearTimeout(timer);
-  }, [notifications]);
-
-  const addNotification = useCallback(
-    (message: string, type: "info" | "success" | "error") => {
-      const next = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        title: type === "success" ? "Success" : type === "error" ? "Failed" : "Update",
-        message,
-        type,
-        timestamp: Date.now(),
-      };
-      setNotifications((current) => [next, ...current].slice(0, 4));
-    },
-    [],
-  );
-
-  const handleLogin = async () => {
-    if (authenticating) return;
-    setAuthenticating(true);
+  /* -- handlers -- */
+  const onLogin = useCallback(async () => {
     setStatusMessage("Authenticating with Passkey...");
-
-    try {
-      const session = await loginEmployee();
-      setEmployee(session);
-      addNotification("Passkey login complete.", "success");
+    const session = await handleLogin();
+    if (session) {
       setStatusMessage(`Welcome back, ${session.name.split(" ")[0]}.`);
-      const nextBalance = await getEmployeeBalance(session.employeeId);
-      setBalance(nextBalance);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to sign in.";
-      addNotification(message, "error");
-      setStatusMessage("Passkey authentication failed.");
-    } finally {
-      setAuthenticating(false);
+    } else {
+      setStatusMessage("Passkey authentication failed. Retry when ready.");
     }
-  };
+  }, [handleLogin]);
 
-  const handleDeposit = async () => {
+  const onDeposit = useCallback(async () => {
     if (!employee || depositing) return;
     setDepositing(true);
     setStatusMessage("Submitting payroll funding...");
-
+    const cleanAmount = depositAmount.replace(/[^0-9.]/g, "") || "50000";
+    const prettyAmount = Number(cleanAmount).toLocaleString("en-US");
     try {
-      const result = await depositPayroll("50,000");
+      const result = await depositPayroll(prettyAmount);
       const nextStatus: TxStatus = result.status === "failed" ? "failed" : "pending";
-      const nextTx = {
-        txHash: result.txHash,
-        status: nextStatus,
-        kind: "deposit" as const,
-        amount: "$50,000",
-        startedAt: Date.now(),
+      const nextTx: QueuedTx = {
+        txHash: result.txHash, status: nextStatus, kind: "deposit",
+        amount: `$${prettyAmount}`, startedAt: Date.now(),
       };
-      setTransactionQueue((current) => [nextTx, ...current].slice(0, 5));
-
+      queueTransaction(nextTx);
+      await reloadActivity();
       if (result.status === "failed") {
         addNotification("Payroll funding failed to submit.", "error");
-        setStatusMessage("Payroll funding error.");
+        setStatusMessage("Payroll funding error. Retry from Flows.");
       } else {
         addNotification("Payroll funding is in motion.", "info");
-        setStatusMessage("Payroll submitted. Confirming... ");
-        setActivity((current) => [
-          {
-            id: `deposit-${result.txHash}`,
-            kind: "deposit",
-            label: "Payroll deposit",
-            timestamp: "Just now",
-            amount: "+50,000 USDC",
-          } as ActivityItem,
-          ...current,
-        ].slice(0, 8));
+        setStatusMessage("Payroll submitted. Confirming...");
+        setReceipt({ type: "deposit", amount: prettyAmount, txHash: result.txHash });
+        navigate("flows");
       }
-    } catch (error) {
+    } catch {
       addNotification("Unable to submit payroll.", "error");
-      setStatusMessage("Payroll submission failed.");
+      setStatusMessage("Payroll submission failed. Retry from Flows.");
     } finally {
       setDepositing(false);
     }
-  };
+  }, [
+    employee,
+    depositing,
+    depositAmount,
+    queueTransaction,
+    addNotification,
+    reloadActivity,
+    navigate,
+  ]);
 
-  const handleWithdraw = async () => {
+  const onWithdraw = useCallback(async () => {
     if (!employee || withdrawing || !balance) return;
     setWithdrawing(true);
     setStatusMessage("Requesting withdrawal...");
-
     try {
       const result = await withdraw(employee.employeeId);
       const nextStatus: TxStatus = result.status === "failed" ? "failed" : "pending";
-      const nextTx = {
-        txHash: result.txHash,
-        status: nextStatus,
-        kind: "withdraw" as const,
-        amount: `$${Number(result.amountReceived).toFixed(2)}`,
-        startedAt: Date.now(),
+      const nextTx: QueuedTx = {
+        txHash: result.txHash, status: nextStatus, kind: "withdraw",
+        amount: `$${Number(result.amountReceived).toFixed(2)}`, startedAt: Date.now(),
       };
-      setTransactionQueue((current) => [nextTx, ...current].slice(0, 5));
-
+      queueTransaction(nextTx);
+      await reloadActivity();
       if (result.status === "failed") {
         addNotification("Withdrawal failed to submit.", "error");
-        setStatusMessage("Withdrawal error.");
+        setStatusMessage("Withdrawal error. Retry when ready.");
       } else {
         addNotification("Withdrawal request queued.", "info");
         setStatusMessage("Withdrawal submitted. Awaiting final settlement.");
-        setActivity((current) => [
-          {
-            id: `withdraw-${result.txHash}`,
-            kind: "withdraw",
-            label: "Payout withdrawal",
-            timestamp: "Just now",
-            amount: `-${Number(result.amountReceived).toFixed(2)} USDC`,
-          } as ActivityItem,
-          ...current,
-        ].slice(0, 8));
+        setReceipt({
+          type: "withdraw",
+          amount: result.amountReceived,
+          txHash: result.txHash,
+        });
+        navigate("activity");
       }
-    } catch (error) {
+    } catch {
       addNotification("Unable to withdraw right now.", "error");
-      setStatusMessage("Withdrawal failed.");
+      setStatusMessage("Withdrawal failed. Retry when ready.");
     } finally {
       setWithdrawing(false);
     }
-  };
+  }, [
+    employee,
+    withdrawing,
+    balance,
+    queueTransaction,
+    addNotification,
+    reloadActivity,
+    navigate,
+  ]);
 
-  const activeProof = employee ? shortAddress(employee.walletAddress) : "Connect to begin";
+  const requestDeposit = useCallback(() => {
+    if (!employee || depositing) return;
+    const clean = depositAmount.replace(/[^0-9.]/g, "") || "50000";
+    setPendingConfirm({ type: "deposit", amount: Number(clean).toLocaleString("en-US") });
+  }, [employee, depositing, depositAmount]);
 
-  const displayStats = useMemo(
-    () => ({
-      totalPool: stats ? formatMoney(parseFloat(stats.totalPool)) : "--",
-      yieldEarned: stats ? formatMoney(parseFloat(stats.yieldEarned)) : "--",
-      bufferAmount: stats ? formatMoney(parseFloat(stats.bufferAmount)) : "--",
-      activeEmployees: stats ? stats.activeEmployees : 0,
-      projectedApy: stats?.projectedApy ?? "--",
-    }),
-    [stats],
-  );
+  const requestWithdraw = useCallback(() => {
+    if (!employee || withdrawing || !balance) return;
+    setPendingConfirm({ type: "withdraw", amount: balance.unlockedAmount });
+  }, [employee, withdrawing, balance]);
+
+  const executeConfirm = useCallback(() => {
+    if (!pendingConfirm) return;
+    const action = pendingConfirm.type;
+    setPendingConfirm(null);
+    if (action === "deposit") void onDeposit();
+    else void onWithdraw();
+  }, [pendingConfirm, onDeposit, onWithdraw]);
+
+  const onResetDemo = useCallback(async () => {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      await resetDemo();
+      clearSession();
+      setStats(await getEmployerStats());
+      setActivity(await getActivity());
+      await initEmployer();
+      setDepositAmount("50000");
+      setPendingConfirm(null);
+      setReceipt(null);
+      setStatusMessage("Demo reset. Ready to flow capital.");
+      addNotification("Demo state cleared.", "success");
+      setSettingsOpen(false);
+      navigate("dashboard");
+    } catch (error) {
+      console.error(error);
+      addNotification("Unable to reset demo.", "error");
+    } finally {
+      setResetting(false);
+    }
+  }, [
+    resetting,
+    clearSession,
+    setStats,
+    setActivity,
+    initEmployer,
+    addNotification,
+    navigate,
+  ]);
 
   return (
     <div className="app-shell">
-      <div className="background-lines">
+      <a className="skip-link" href="#main">Skip to content</a>
+
+      <div className="background-lines" aria-hidden="true">
         <div className="line line-one" />
         <div className="line line-two" />
         <div className="line line-three" />
       </div>
 
       <section className="top-shell">
-        <button className="brand-mark" type="button">
+        <button className="brand-mark" type="button" onClick={() => navigate("dashboard")}>
           <span className="brand-glyph">YF</span>
           YieldFlow
         </button>
 
-        <div className="pill-nav">
-          <button className="nav-item active" type="button">
-            Dashboard
-          </button>
-          <button className="nav-item" type="button">
-            Flows
-          </button>
-          <button className="nav-item" type="button">
-            Activity
-          </button>
+        <div className="pill-nav" role="tablist" aria-label="Primary">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              className={`nav-item${page === item.id ? " active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={page === item.id}
+              onClick={(event) => { ripple(event); navigate(item.id); }}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        <div className="status-pill">
-          <span className="status-dot" />
-          <span>{statusMessage}</span>
+        <div className="top-shell-actions">
+          <div className="status-pill" role="status" aria-live="polite">
+            <span className="status-dot" />
+            <span>{statusMessage}</span>
+          </div>
+          <button
+            type="button"
+            className="icon-nav-btn"
+            aria-label="Open demo settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings2 size={16} />
+          </button>
         </div>
       </section>
 
-      <main className="main-canvas">
+      <main className="main-canvas" id="main" ref={mainRef} tabIndex={-1}>
         <section className="screen-section compact-screen hero-block">
-          <span className="eyebrow">Premium payroll yield orchestration</span>
-          <h1>
-            Animate workplace payroll, capture yield, and keep every employee flow connected.
-          </h1>
-          <p>
-            The app now surfaces transactional movement, confirms each step with motion, and keeps the live stream balance visually in sync with every activity.
-          </p>
+          <span className="eyebrow">{pageCopy[page].eyebrow}</span>
+          <h1>{pageCopy[page].title}</h1>
+          <p>{pageCopy[page].body}</p>
+          <div className="context-chips">
+            <span className="context-chip">{networkLabel}</span>
+            <span className="context-chip">USDC</span>
+            <span className="context-chip">SDK · {sdkMeta.mode}</span>
+            <span className="context-chip">Biweekly · {displayStats.activeEmployees} staff</span>
+            {employee && <span className="context-chip live-chip">Session active</span>}
+          </div>
         </section>
 
-        <section className="dashboard-grid">
-          <article className="metric-card accent">
-            <div className="metric-top">
-              <span>Total pool</span>
-              <Sparkles />
-            </div>
-            <strong>{displayStats.totalPool}</strong>
-            <small>Capital under yield allocation</small>
-          </article>
+        {!booting && page === "dashboard" && (
+          <HealthStrip
+            employee={employee}
+            stats={stats}
+            transactionQueue={transactionQueue}
+            sdkMode={sdkMeta.mode}
+            networkLabel={networkLabel}
+          />
+        )}
 
-          <article className="metric-card">
-            <div className="metric-top">
-              <span>Yield earned</span>
-              <span>{stats?.projectedApy}% APY</span>
-            </div>
-            <strong>{displayStats.yieldEarned}</strong>
-            <small>Accumulated from underlying streams</small>
-          </article>
-
-          <article className="metric-card">
-            <div className="metric-top">
-              <span>Buffer reserve</span>
-              <span>{stats?.bufferPercent}%</span>
-            </div>
-            <strong>{displayStats.bufferAmount}</strong>
-            <small>Liquidity kept for instant withdrawals</small>
-          </article>
-
-          <article className="metric-card">
-            <div className="metric-top">
-              <span>Active employees</span>
-              <span>{stats?.projectedApy}%</span>
-            </div>
-            <strong>{displayStats.activeEmployees}</strong>
-            <small>Live staff receiving streamed pay</small>
-          </article>
-
-          <section className="flow-panel glass-panel">
-            <div className="panel-header">
-              <div>
-                <p className="label">Live employee stream</p>
-                <h2>Continuous wage settlement</h2>
-              </div>
-              <span className="chip">Flowing now</span>
-            </div>
-
-            <p className="live-amount">
-              {formatMoney(liveBalance, 2)}
-              <small>{balance ? `${Number(balance.ratePerSecond).toFixed(4)} USDC/sec` : "0.0000 USDC/sec"}</small>
-            </p>
-
-            <div className="stream-progress">
-              <div className="stream-progress-top">
-                <span>Next payday</span>
-                <span>{balance?.nextPayday ?? "Waiting"}</span>
-              </div>
-              <div className="progress-track">
-                <span style={{ width: stats ? `${Math.min(100, (Number(balance?.unlockedAmount ?? 0) / Number(balance?.streamCap ?? 1)) * 100)};%` : "0%" }} />
-              </div>
-            </div>
-
-            <button className="primary-btn" type="button" onClick={handleDeposit} disabled={depositing || !employee}>
-              {depositing ? <Loader2 className="spin" /> : <ArrowUpRight />}
-              {depositing ? "Funding payroll…" : "Fund payroll"}
-            </button>
-          </section>
-
-          <section className="chart-panel glass-panel">
-            <div className="panel-header">
-              <div>
-                <p className="label">Activity map</p>
-                <h2>Connected settlement flow</h2>
-              </div>
-              <span className="chip">Momentum</span>
-            </div>
-
-            <div className="flow-map">
-              <div className="flow-node active">
-                <div>
-                  <Wallet />
-                </div>
-                Employer pool
-              </div>
-              <div className="flow-arrow">→</div>
-              <div className="flow-node active">
-                <div>
-                  <Layers />
-                </div>
-                Yield vault
-              </div>
-              <div className="flow-arrow">→</div>
-              <div className="flow-node active">
-                <div>
-                  <Activity />
-                </div>
-                Employee streams
-              </div>
-            </div>
-
-            <div className="tx-status">
-              <div className="tx-header">
-                <span>Latest transaction</span>
-                <strong>{activeTx?.status ?? "idle"}</strong>
-              </div>
-              <div className="tx-steps">
-                <span className={activeTx?.status === "pending" ? "current" : activeTx?.status === "confirmed" ? "done" : ""}>
-                  {activeTx ? activeTx.kind : "no activity"}
-                </span>
-                <span className={activeTx?.status === "confirmed" ? "done" : ""}>
-                  confirmed
-                </span>
-              </div>
-              {activeTx && (
-                <div className="tx-hash">
-                  <code>{activeTx.txHash.slice(0, 12)}...</code>
-                  <span>{activeTx.amount}</span>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="activity-panel glass-panel">
-            <div className="panel-header">
-              <div>
-                <p className="label">Activity feed</p>
-                <h2>Recent motion</h2>
-              </div>
-              <span className="chip">Live</span>
-            </div>
-
-            <div className="activity-list">
-              {activity.map((item) => {
-                const Icon = kindIcons[item.kind] ?? Activity;
-                return (
-                  <div className="activity-row" key={item.id}>
-                    <div className="activity-icon" style={{ background: item.kind === "withdraw" ? "rgba(255, 103, 102, 0.18)" : "rgba(202, 40, 81, 0.14)" }}>
-                      <Icon />
-                    </div>
-                    <div>
-                      <strong>{item.label ?? kindLabel[item.kind]}</strong>
-                      <small>{item.timestamp}</small>
-                    </div>
-                    <div className="activity-amount">{item.amount}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="live-balance-panel glass-panel">
-            <div className="panel-header">
-              <div>
-                <p className="label">Session snapshot</p>
-                <h2>Employee access</h2>
-              </div>
-              <span className="chip">Fast auth</span>
-            </div>
-
-            <div className="wallet-line">
-              <strong>{employee ? employee.name : "Not signed in"}</strong>
-              <small>{employee ? activeProof : "Passkey login required"}</small>
-            </div>
-
-            <button className="primary-btn" type="button" onClick={handleLogin} disabled={authenticating}>
-              {authenticating ? <Loader2 className="spin" /> : <ShieldCheck />}
-              {authenticating ? "Authenticating..." : employee ? "Restore session" : "Sign in with Passkey"}
-            </button>
-
-            <section className="mini-grid" style={{ marginTop: 24 }}>
-              <article className="metric-card">
-                <div className="metric-top">
-                  <span>Wallet</span>
-                  <Wallet />
-                </div>
-                <strong>{employee ? shortAddress(employee.walletAddress) : "—"}</strong>
-                <small>Connected employee account</small>
+        {booting ? (
+          <section className="dashboard-grid" aria-busy="true" aria-label="Loading dashboard">
+            {[1, 2, 3, 4].map((n) => (
+              <article key={n} className="metric-card skeleton-card">
+                <div className="metric-top"><span>Loading</span></div>
+                <strong>--</strong>
+                <small>Fetching SDK state</small>
               </article>
-
-              <article className="metric-card">
-                <div className="metric-top">
-                  <span>Authorization</span>
-                  <Clock3 />
-                </div>
-                <strong>{employee ? "Active" : "Offline"}</strong>
-                <small>Passkey session state</small>
-              </article>
-            </section>
+            ))}
           </section>
+        ) : null}
 
-          <section className="withdraw-panel glass-panel">
-            <div className="panel-header">
-              <div>
-                <p className="label">Withdraw liquidity</p>
-                <h2>Instant payout request</h2>
-              </div>
-              <span className="chip">One-click</span>
-            </div>
+        {!booting && page === "dashboard" && (
+          <Dashboard
+            employer={employer}
+            employee={employee}
+            balance={balance}
+            displayStats={displayStats}
+            liveBalance={liveBalance}
+            streamProgress={streamProgress}
+            activity={activity}
+            authenticating={authenticating}
+            withdrawing={withdrawing}
+            expandedActivityId={expandedActivityId}
+            onToggleExpand={setExpandedActivityId}
+            onLogin={onLogin}
+            onWithdraw={requestWithdraw}
+            onNavigate={navigate}
+          />
+        )}
 
-            <p className="muted">
-              Withdraw your available unlocked balance from the live stream to wallet settlement.
-            </p>
+        {!booting && page === "flows" && (
+          <Flows
+            employer={employer}
+            employee={employee}
+            balance={balance}
+            displayStats={displayStats}
+            liveBalance={liveBalance}
+            streamProgress={streamProgress}
+            activeTx={activeTx}
+            transactionQueue={transactionQueue}
+            stats={stats}
+            depositing={depositing}
+            withdrawing={withdrawing}
+            depositAmount={depositAmount}
+            onDepositAmountChange={setDepositAmount}
+            onDeposit={requestDeposit}
+            onWithdraw={requestWithdraw}
+            onNavigate={navigate}
+          />
+        )}
 
-            <button className="secondary-btn" type="button" onClick={handleWithdraw} disabled={!employee || withdrawing || !balance}>
-              {withdrawing ? <Loader2 className="spin" /> : <ArrowDownRight />}
-              {withdrawing ? "Withdrawing…" : "Request payout"}
-            </button>
-
-            <div className="setting-row" style={{ marginTop: 20 }}>
-              <strong>{balance ? formatMoney(Number(balance.unlockedAmount), 2) : "--"}</strong>
-              <small>Available unlocked amount</small>
-            </div>
-          </section>
-        </section>
+        {!booting && page === "activity" && (
+          <ActivityPage
+            filteredActivity={filteredActivity}
+            activityFilter={activityFilter}
+            statusFilter={statusFilter}
+            searchQuery={searchQuery}
+            transactionQueue={transactionQueue}
+            expandedActivityId={expandedActivityId}
+            detailItem={detailItem}
+            onToggleExpand={setExpandedActivityId}
+            onFilterChange={setActivityFilter}
+            onStatusFilterChange={setStatusFilter}
+            onSearchChange={setSearchQuery}
+            onOpenDetail={setDetailItem}
+            onExportCsv={exportCsv}
+            onNavigate={navigate}
+          />
+        )}
       </main>
 
-      <div className="toast-stack">
+      {pendingConfirm && (
+        <ConfirmDialog
+          type={pendingConfirm.type}
+          amount={pendingConfirm.amount}
+          displayStats={displayStats}
+          onConfirm={executeConfirm}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
+
+      {receipt && (
+        <ReceiptDialog
+          receipt={receipt}
+          displayStats={displayStats}
+          onClose={() => setReceipt(null)}
+          onOpenActivity={() => navigate("activity")}
+        />
+      )}
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        sdkMode={sdkMeta.mode}
+        networkLabel={networkLabel}
+        resetting={resetting}
+        onResetDemo={() => void onResetDemo()}
+      />
+
+      <div className="toast-stack" aria-live="polite" aria-relevant="additions">
         {notifications.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.type}`}>
             <div className="toast-header">
