@@ -159,3 +159,12 @@ Frontend TypeScript demo path (mock-first) also exposes activity / preview / str
 - Run `npm --prefix frontend run build`
 - Default remains mock (`VITE_YIELDFLOW_SDK=mock`)
 
+
+---
+
+## 2026-07-21 — YieldFlow Plan v2 execution pass
+
+- Audited plan vs repo: Phases 0–2 product surface already implemented.
+- Advanced Phase 3 readiness: Vite loads contract IDs from `deployments/testnet.json`; hop pulse + pipeline `tx-hot`; runbook `docs/PHASE3_STELLAR_SWAP.md`; `npm run plan:verify`.
+- Replaced `yieldflow plan v2.md` with live status tracker (no full PRD duplicate).
+- Default remains mock; live Stellar still blocked on deploy + wallet signer.

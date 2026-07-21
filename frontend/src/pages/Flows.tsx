@@ -159,7 +159,7 @@ export default function Flows({
             const Icon = stage.icon;
             return (
               <div key={stage.id} className="flow-stage">
-                <div className={`flow-node${stage.active ? " active" : ""}`}>
+                <div className={`flow-node${stage.active ? " active" : ""}${activeTx && (stage.id === "vault" || stage.id === "stream") ? " tx-hot" : ""}`}>
                   <div>
                     <Icon size={18} />
                   </div>

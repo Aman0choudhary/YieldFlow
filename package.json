@@ -10,6 +10,8 @@
     "preview": "npm --prefix frontend run preview",
     "demo:reset": "powershell -ExecutionPolicy Bypass -File ./scripts/demo-reset.ps1",
     "deploy:testnet": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-testnet.ps1",
-    "verify:demo": "powershell -ExecutionPolicy Bypass -File ./scripts/verify-demo.ps1"
+    "verify:demo": "powershell -ExecutionPolicy Bypass -File ./scripts/verify-demo.ps1",
+    "plan:verify": "npm run verify:demo && npm --prefix frontend run build",
+    "phase3:docs": "powershell -Command Get-Content docs/PHASE3_STELLAR_SWAP.md"
   }
 }

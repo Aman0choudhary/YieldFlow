@@ -2429,3 +2429,24 @@ html.force-reduced-motion *::after,
     grid-template-columns: 1fr;
   }
 }
+
+/* Plan v2 Phase 1: stronger in-flight hop pulse */
+@keyframes hopPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 177, 115, 0.45); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 177, 115, 0); }
+}
+
+.hop-step.current .hop-dot {
+  animation: hopPulse 1.4s ease-in-out infinite;
+}
+
+.flow-node.active.tx-hot {
+  outline: 1px solid rgba(255, 177, 115, 0.35);
+  box-shadow: 0 0 24px rgba(255, 177, 115, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hop-step.current .hop-dot {
+    animation: none;
+  }
+}

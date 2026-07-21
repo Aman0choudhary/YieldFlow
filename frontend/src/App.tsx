@@ -176,7 +176,7 @@ export default function App() {
       queueTransaction(nextTx);
       await reloadActivity();
       if (result.status === "failed") {
-        addNotification("Payroll funding failed to submit.", "error");
+        addNotification("Payroll funding failed to submit. You can retry from Flows.", "error");
         setStatusMessage("Payroll funding error. Retry from Flows.");
       } else {
         addNotification("Payroll funding is in motion.", "info");
@@ -214,7 +214,7 @@ export default function App() {
       queueTransaction(nextTx);
       await reloadActivity();
       if (result.status === "failed") {
-        addNotification("Withdrawal failed to submit.", "error");
+        addNotification("Withdrawal failed to submit. You can retry when ready.", "error");
         setStatusMessage("Withdrawal error. Retry when ready.");
       } else {
         addNotification("Withdrawal request queued.", "info");
