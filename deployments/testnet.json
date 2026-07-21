@@ -1,13 +1,13 @@
-{
-  "network": "testnet",
-  "source_account": "yieldflow-deployer",
-  "employer_address": "GD2XEYNTQ4BWVK6ORZPHU625ZKRT2ICPDVSEXCDLPWCHHJXBPPMD6IJM",
-  "token_contract_id": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
-  "streaming_contract_id": "CAFCD3TBDN5DQA5URIHJXEVZJLIJL7MMHI5KXSBLQLL4CZM2WZCEEBFU",
-  "vault_contract_id": "CAK54ESAEOSJUZM473KCUJMMFYRYT6TVJYMGRCEXGTWSVH5SA3WZFE5B",
-  "buffer_bps": 1500,
-  "yield_bps": 8500,
-  "streaming_wasm_sha256": "5454a8a0264da6aa1b30382520fe8a9446fd0b05460c42f95915cbe65bab7493",
-  "vault_wasm_sha256": "0d5c5a41f5112549368c3ecbe01fb71972f4dfc6bde40a5462dcd0c5ec4cf16d",
-  "deployed_at": "2026-07-18T05:48:46.6845567Z"
+﻿{
+    "network":  "testnet",
+    "source_account":  "yieldflow-deployer",
+    "employer_address":  "GD2XEYNTQ4BWVK6ORZPHU625ZKRT2ICPDVSEXCDLPWCHHJXBPPMD6IJM",
+    "token_contract_id":  "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    "streaming_contract_id":  "CAFCD3TBDN5DQA5URIHJXEVZJLIJL7MMHI5KXSBLQLL4CZM2WZCEEBFU",
+    "vault_contract_id":  "CAK54ESAEOSJUZM473KCUJMMFYRYT6TVJYMGRCEXGTWSVH5SA3WZFE5B",
+    "buffer_bps":  1500,
+    "yield_bps":  8500,
+    "streaming_wasm_sha256":  "5454a8a0264da6aa1b30382520fe8a9446fd0b05460c42f95915cbe65bab7493",
+    "vault_wasm_sha256":  "0d5c5a41f5112549368c3ecbe01fb71972f4dfc6bde40a5462dcd0c5ec4cf16d",
+    "deployed_at":  "2026-07-18T05:48:46.6845567Z"
 }

@@ -1,4 +1,4 @@
-﻿export type TxStatus =
+export type TxStatus =
   | "idle"
   | "authenticating"
   | "building"
@@ -9,11 +9,14 @@
 
 export type EmployerConnection = {
   address: string;
+  network?: string;
+  connectedAt?: string;
 };
 
 export type DepositPayrollResult = {
   txHash: string;
   status: Extract<TxStatus, "submitted" | "confirmed" | "failed">;
+  amount?: string;
 };
 
 export type EmployerStats = {

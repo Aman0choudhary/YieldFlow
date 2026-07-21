@@ -34,7 +34,7 @@
     "status": "manual_action_required",
     "network": "Stellar Testnet",
     "asset": "USDC",
-      "send_to": "GD2XEYNTQ4BWVK6ORZPHU625ZKRT2ICPDVSEXCDLPWCHHJXBPPMD6IJM",
+    "send_to": "GDIPYV4FKF7WWB45NWT52RESKJ2TRCKGBMVH7R64K2L6PXQDEMF7QOTI",
     "url": "https://faucet.circle.com"
   },
   "blend_testnet": {

@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Clock3,
+  ExternalLink,
   Layers,
   Loader2,
   Sparkles,
@@ -32,6 +33,21 @@ import type {
 } from "./sdk/yieldflow-sdk";
 import { useAnimatedNumber, formatRelativeTime } from "./animation-utils";
 
+/* ── Constants ───────────────────────────────────── */
+
+const STELLAR_EXPERT_BASE = "https://stellar.expert/explorer/testnet";
+
+const TESTNET_CONTRACTS = {
+  vault: "CAK54ESAEOSJUZM473KCUJMMFYRYT6TVJYMGRCEXGTWSVH5SA3WZFE5B",
+  streaming: "CAFCD3TBDN5DQA5URIHJXEVZJLIJL7MMHI5KXSBLQLL4CZM2WZCEEBFU",
+};
+
+const TESTNET_TRANSACTIONS = [
+  { label: "Deposit 10 USDC", hash: "f25f7d5cca33e4b87e24ad3034c97d1e60446f36f6b4b0170d1cf5700520635c" },
+  { label: "Create 5 USDC stream", hash: "61ea40e6d8324b34c6ba1536f9ae0d391bc6ebfd0c9c0b4374df6b30b1e21e50" },
+  { label: "Withdraw 0.0001 USDC", hash: "d6c1765f2a3965c49a6cdecf3fd279ab7b14abbd858e237a1b564f07e3936632" },
+];
+
 const kindIcons = {
   deposit: ArrowUpRight,
   withdraw: ArrowDownRight,
@@ -40,7 +56,7 @@ const kindIcons = {
   auth: Wallet,
 } as const;
 
-const kindLabel: Record<ActivityItem['kind'], string> = {
+const kindLabel: Record<ActivityItem["kind"], string> = {
   deposit: "Payroll deposit",
   withdraw: "Withdraw settled",
   stream: "Employee stream",
@@ -57,14 +73,7 @@ const formatMoney = (value: number, digits = 2) =>
   });
 
 const shortAddress = (address: string) =>
-  `${address.slice(0, 8)}...${address.slice(-6)}`;
-
-const toastStyle = {
-  deposit: "info",
-  withdraw: "warning",
-  confirmed: "success",
-  failed: "error",
-} as const;
+  `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 const initialNotifications: Array<{
   id: string;
@@ -76,6 +85,8 @@ const initialNotifications: Array<{
 
 const payrollDepositAmount = "1";
 
+/* ── App ─────────────────────────────────────────── */
+
 export default function App() {
   const [employer, setEmployer] = useState<EmployerConnection | null>(null);
   const [employee, setEmployee] = useState<EmployeeSession | null>(null);
@@ -86,19 +97,25 @@ export default function App() {
   const [authenticating, setAuthenticating] = useState(false);
   const [depositing, setDepositing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
-  const [transactionQueue, setTransactionQueue] = useState<{
-    txHash: string;
-    status: TxStatus;
-    kind: "deposit" | "withdraw";
-    amount: string;
-    startedAt: number;
-  }[]>([]);
+  const [transactionQueue, setTransactionQueue] = useState<
+    {
+      txHash: string;
+      status: TxStatus;
+      kind: "deposit" | "withdraw";
+      amount: string;
+      startedAt: number;
+    }[]
+  >([]);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [liveTarget, setLiveTarget] = useState(0);
-  
-  const activeTx = transactionQueue.find((tx) => tx.status === "pending" || tx.status === "submitted");
+
+  const activeTx = transactionQueue.find(
+    (tx) => tx.status === "pending" || tx.status === "submitted"
+  );
 
   const liveBalance = useAnimatedNumber(liveTarget, 500);
+
+  /* ── Init ────────────────────────────────────── */
 
   useEffect(() => {
     const init = async () => {
@@ -118,8 +135,8 @@ export default function App() {
         if (restore.employeeId) {
           setEmployee({
             employeeId: restore.employeeId,
-            name: "Aditiya Sharma",
-            walletAddress: "CCONTRACT...PASSKEY...YF01",
+            name: "Demo Employee",
+            walletAddress: restore.employeeId,
           });
           const nextBalance = await getEmployeeBalance(restore.employeeId);
           setBalance(nextBalance);
@@ -134,6 +151,8 @@ export default function App() {
 
     void init();
   }, []);
+
+  /* ── Live balance ticker ─────────────────────── */
 
   useEffect(() => {
     if (!balance) {
@@ -154,6 +173,8 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [balance]);
 
+  /* ── Transaction polling ─────────────────────── */
+
   useEffect(() => {
     if (!transactionQueue.some((tx) => tx.status === "pending")) {
       return;
@@ -166,20 +187,25 @@ export default function App() {
         if (status === tx.status) return;
 
         setTransactionQueue((current) =>
-          current.map((item) => (item.txHash === tx.txHash ? { ...item, status } : item)),
+          current.map((item) =>
+            item.txHash === tx.txHash ? { ...item, status } : item
+          )
         );
 
         if (status === "confirmed") {
-          addNotification(`Transaction confirmed`, "success");
+          addNotification("Transaction confirmed", "success");
           setStatusMessage("Transaction confirmed. Yield is live.");
           if (employee) {
             const refreshed = await getEmployeeBalance(employee.employeeId);
             setBalance(refreshed);
           }
+          // Refresh stats
+          const newStats = await getEmployerStats();
+          setStats(newStats);
         }
 
         if (status === "failed") {
-          addNotification(`Transaction failed`, "error");
+          addNotification("Transaction failed", "error");
           setStatusMessage("Transaction failed. Try again.");
         }
       });
@@ -187,6 +213,8 @@ export default function App() {
 
     return () => window.clearInterval(poll);
   }, [transactionQueue, employee]);
+
+  /* ── Toast auto-dismiss ──────────────────────── */
 
   useEffect(() => {
     if (!notifications.length) return;
@@ -200,15 +228,22 @@ export default function App() {
     (message: string, type: "info" | "success" | "error") => {
       const next = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        title: type === "success" ? "Success" : type === "error" ? "Failed" : "Update",
+        title:
+          type === "success"
+            ? "Success"
+            : type === "error"
+            ? "Failed"
+            : "Update",
         message,
         type,
         timestamp: Date.now(),
       };
       setNotifications((current) => [next, ...current].slice(0, 4));
     },
-    [],
+    []
   );
+
+  /* ── Handlers ────────────────────────────────── */
 
   const handleLogin = async () => {
     if (authenticating) return;
@@ -223,7 +258,8 @@ export default function App() {
       const nextBalance = await getEmployeeBalance(session.employeeId);
       setBalance(nextBalance);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to sign in.";
+      const message =
+        error instanceof Error ? error.message : "Unable to sign in.";
       addNotification(message, "error");
       setStatusMessage("Passkey authentication failed.");
     } finally {
@@ -238,7 +274,8 @@ export default function App() {
 
     try {
       const result = await depositPayroll(payrollDepositAmount);
-      const nextStatus: TxStatus = result.status === "failed" ? "failed" : "pending";
+      const nextStatus: TxStatus =
+        result.status === "failed" ? "failed" : "pending";
       const nextTx = {
         txHash: result.txHash,
         status: nextStatus,
@@ -253,19 +290,21 @@ export default function App() {
         setStatusMessage("Payroll funding error.");
       } else {
         addNotification("Payroll funding is in motion.", "info");
-        setStatusMessage("Payroll submitted. Confirming... ");
-        setActivity((current) => [
-          {
-            id: `deposit-${result.txHash}`,
-            kind: "deposit",
-            label: "Payroll deposit",
-            timestamp: "Just now",
-            amount: `+${payrollDepositAmount} USDC`,
-          } as ActivityItem,
-          ...current,
-        ].slice(0, 8));
+        setStatusMessage("Payroll submitted. Confirming...");
+        setActivity((current) =>
+          [
+            {
+              id: `deposit-${result.txHash}`,
+              kind: "deposit",
+              label: "Payroll deposit",
+              timestamp: "Just now",
+              amount: `+${payrollDepositAmount} USDC`,
+            } as ActivityItem,
+            ...current,
+          ].slice(0, 8)
+        );
       }
-    } catch (error) {
+    } catch {
       addNotification("Unable to submit payroll.", "error");
       setStatusMessage("Payroll submission failed.");
     } finally {
@@ -280,7 +319,8 @@ export default function App() {
 
     try {
       const result = await withdraw(employee.employeeId);
-      const nextStatus: TxStatus = result.status === "failed" ? "failed" : "pending";
+      const nextStatus: TxStatus =
+        result.status === "failed" ? "failed" : "pending";
       const nextTx = {
         txHash: result.txHash,
         status: nextStatus,
@@ -295,19 +335,21 @@ export default function App() {
         setStatusMessage("Withdrawal error.");
       } else {
         addNotification("Withdrawal request queued.", "info");
-        setStatusMessage("Withdrawal submitted. Awaiting final settlement.");
-        setActivity((current) => [
-          {
-            id: `withdraw-${result.txHash}`,
-            kind: "withdraw",
-            label: "Payout withdrawal",
-            timestamp: "Just now",
-            amount: `-${Number(result.amountReceived).toFixed(2)} USDC`,
-          } as ActivityItem,
-          ...current,
-        ].slice(0, 8));
+        setStatusMessage("Withdrawal submitted. Awaiting settlement.");
+        setActivity((current) =>
+          [
+            {
+              id: `withdraw-${result.txHash}`,
+              kind: "withdraw",
+              label: "Payout withdrawal",
+              timestamp: "Just now",
+              amount: `-${Number(result.amountReceived).toFixed(4)} USDC`,
+            } as ActivityItem,
+            ...current,
+          ].slice(0, 8)
+        );
       }
-    } catch (error) {
+    } catch {
       addNotification("Unable to withdraw right now.", "error");
       setStatusMessage("Withdrawal failed.");
     } finally {
@@ -315,18 +357,31 @@ export default function App() {
     }
   };
 
-  const activeProof = employee ? shortAddress(employee.walletAddress) : "Connect to begin";
+  /* ── Computed display values ─────────────────── */
+
+  const activeProof = employee
+    ? shortAddress(employee.walletAddress)
+    : "Connect to begin";
 
   const displayStats = useMemo(
     () => ({
       totalPool: stats ? formatMoney(parseFloat(stats.totalPool)) : "--",
-      yieldEarned: stats ? formatMoney(parseFloat(stats.yieldEarned)) : "--",
+      yieldEarned: stats ? formatMoney(parseFloat(stats.yieldEarned), 4) : "--",
       bufferAmount: stats ? formatMoney(parseFloat(stats.bufferAmount)) : "--",
       activeEmployees: stats ? stats.activeEmployees : 0,
       projectedApy: stats?.projectedApy ?? "--",
     }),
-    [stats],
+    [stats]
   );
+
+  const streamProgress = balance
+    ? Math.min(
+        100,
+        (Number(balance.unlockedAmount) / Number(balance.streamCap || 1)) * 100
+      )
+    : 0;
+
+  /* ── Render ────────────────────────────────────── */
 
   return (
     <div className="app-shell">
@@ -336,6 +391,7 @@ export default function App() {
         <div className="line line-three" />
       </div>
 
+      {/* ── Top nav ── */}
       <section className="top-shell">
         <button className="brand-mark" type="button">
           <span className="brand-glyph">YF</span>
@@ -361,17 +417,25 @@ export default function App() {
       </section>
 
       <main className="main-canvas">
+        {/* ── Hero ── */}
         <section className="screen-section compact-screen hero-block">
-          <span className="eyebrow">Premium payroll yield orchestration</span>
+          <span className="eyebrow">
+            <Sparkles /> Payroll yield orchestration on Stellar
+          </span>
           <h1>
-            Animate workplace payroll, capture yield, and keep every employee flow connected.
+            Stream salaries.{" "}
+            <span>Earn yield</span> on idle payroll.
           </h1>
           <p>
-            The app now surfaces transactional movement, confirms each step with motion, and keeps the live stream balance visually in sync with every activity.
+            YieldFlow streams salaries to employees second-by-second while
+            employers earn DeFi yield on unstreamed payroll — gasless,
+            passkey-based withdrawals, no seed phrases.
           </p>
         </section>
 
+        {/* ── Dashboard grid ── */}
         <section className="dashboard-grid">
+          {/* Metric cards */}
           <article className="metric-card accent">
             <div className="metric-top">
               <span>Total pool</span>
@@ -387,7 +451,7 @@ export default function App() {
               <span>{stats?.projectedApy}% APY</span>
             </div>
             <strong>{displayStats.yieldEarned}</strong>
-            <small>Accumulated from underlying streams</small>
+            <small>Accumulated from DeFi routing</small>
           </article>
 
           <article className="metric-card">
@@ -396,30 +460,37 @@ export default function App() {
               <span>{stats?.bufferPercent}%</span>
             </div>
             <strong>{displayStats.bufferAmount}</strong>
-            <small>Liquidity kept for instant withdrawals</small>
+            <small>Instant withdrawal liquidity</small>
           </article>
 
           <article className="metric-card">
             <div className="metric-top">
               <span>Active employees</span>
-              <span>{stats?.projectedApy}%</span>
+              <span>Streaming</span>
             </div>
             <strong>{displayStats.activeEmployees}</strong>
-            <small>Live staff receiving streamed pay</small>
+            <small>Receiving streamed payroll</small>
           </article>
 
+          {/* ── Live stream panel ── */}
           <section className="flow-panel glass-panel">
             <div className="panel-header">
               <div>
                 <p className="label">Live employee stream</p>
                 <h2>Continuous wage settlement</h2>
               </div>
-              <span className="chip">Flowing now</span>
+              <span className="chip">
+                <span className="stream-dot" /> Flowing
+              </span>
             </div>
 
             <p className="live-amount">
               {formatMoney(liveBalance, 2)}
-              <small>{balance ? `${Number(balance.ratePerSecond).toFixed(4)} USDC/sec` : "0.0000 USDC/sec"}</small>
+              <small>
+                {balance
+                  ? `${Number(balance.ratePerSecond).toFixed(4)} USDC/sec`
+                  : "0.0000 USDC/sec"}
+              </small>
             </p>
 
             <div className="stream-progress">
@@ -428,23 +499,29 @@ export default function App() {
                 <span>{balance?.nextPayday ?? "Waiting"}</span>
               </div>
               <div className="progress-track">
-                <span style={{ width: stats ? `${Math.min(100, (Number(balance?.unlockedAmount ?? 0) / Number(balance?.streamCap ?? 1)) * 100)};%` : "0%" }} />
+                <span style={{ width: `${streamProgress}%` }} />
               </div>
             </div>
 
-            <button className="primary-btn" type="button" onClick={handleDeposit} disabled={depositing || !employee}>
+            <button
+              className="primary-btn"
+              type="button"
+              onClick={handleDeposit}
+              disabled={depositing || !employee}
+            >
               {depositing ? <Loader2 className="spin" /> : <ArrowUpRight />}
               {depositing ? "Funding payroll…" : "Fund payroll"}
             </button>
           </section>
 
+          {/* ── Flow visualization ── */}
           <section className="chart-panel glass-panel">
             <div className="panel-header">
               <div>
-                <p className="label">Activity map</p>
-                <h2>Connected settlement flow</h2>
+                <p className="label">Capital flow</p>
+                <h2>Settlement architecture</h2>
               </div>
-              <span className="chip">Momentum</span>
+              <span className="chip">Live</span>
             </div>
 
             <div className="flow-map">
@@ -452,21 +529,28 @@ export default function App() {
                 <div>
                   <Wallet />
                 </div>
-                Employer pool
+                Employer
               </div>
               <div className="flow-arrow">→</div>
               <div className="flow-node active">
                 <div>
                   <Layers />
                 </div>
-                Yield vault
+                Vault (85/15)
               </div>
               <div className="flow-arrow">→</div>
               <div className="flow-node active">
                 <div>
                   <Activity />
                 </div>
-                Employee streams
+                Stream
+              </div>
+              <div className="flow-arrow">→</div>
+              <div className="flow-node active">
+                <div>
+                  <ShieldCheck />
+                </div>
+                Employee
               </div>
             </div>
 
@@ -476,10 +560,20 @@ export default function App() {
                 <strong>{activeTx?.status ?? "idle"}</strong>
               </div>
               <div className="tx-steps">
-                <span className={activeTx?.status === "pending" ? "current" : activeTx?.status === "confirmed" ? "done" : ""}>
+                <span
+                  className={
+                    activeTx?.status === "pending"
+                      ? "current"
+                      : activeTx?.status === "confirmed"
+                      ? "done"
+                      : ""
+                  }
+                >
                   {activeTx ? activeTx.kind : "no activity"}
                 </span>
-                <span className={activeTx?.status === "confirmed" ? "done" : ""}>
+                <span
+                  className={activeTx?.status === "confirmed" ? "done" : ""}
+                >
                   confirmed
                 </span>
               </div>
@@ -492,6 +586,7 @@ export default function App() {
             </div>
           </section>
 
+          {/* ── Activity feed ── */}
           <section className="activity-panel glass-panel">
             <div className="panel-header">
               <div>
@@ -506,7 +601,15 @@ export default function App() {
                 const Icon = kindIcons[item.kind] ?? Activity;
                 return (
                   <div className="activity-row" key={item.id}>
-                    <div className="activity-icon" style={{ background: item.kind === "withdraw" ? "rgba(255, 103, 102, 0.18)" : "rgba(202, 40, 81, 0.14)" }}>
+                    <div
+                      className="activity-icon"
+                      style={{
+                        background:
+                          item.kind === "withdraw"
+                            ? "rgba(255, 103, 102, 0.18)"
+                            : "rgba(202, 40, 81, 0.14)",
+                      }}
+                    >
                       <Icon />
                     </div>
                     <div>
@@ -520,6 +623,7 @@ export default function App() {
             </div>
           </section>
 
+          {/* ── Employee access ── */}
           <section className="live-balance-panel glass-panel">
             <div className="panel-header">
               <div>
@@ -530,13 +634,30 @@ export default function App() {
             </div>
 
             <div className="wallet-line">
-              <strong>{employee ? employee.name : "Not signed in"}</strong>
-              <small>{employee ? activeProof : "Passkey login required"}</small>
+              <strong>
+                {employee ? employee.name : "Not signed in"}
+              </strong>
+              <small>
+                {employee ? activeProof : "Passkey login required"}
+              </small>
             </div>
 
-            <button className="primary-btn" type="button" onClick={handleLogin} disabled={authenticating}>
-              {authenticating ? <Loader2 className="spin" /> : <ShieldCheck />}
-              {authenticating ? "Authenticating..." : employee ? "Restore session" : "Sign in with Passkey"}
+            <button
+              className="primary-btn"
+              type="button"
+              onClick={handleLogin}
+              disabled={authenticating}
+            >
+              {authenticating ? (
+                <Loader2 className="spin" />
+              ) : (
+                <ShieldCheck />
+              )}
+              {authenticating
+                ? "Authenticating..."
+                : employee
+                ? "Restore session"
+                : "Sign in with Passkey"}
             </button>
 
             <section className="mini-grid" style={{ marginTop: 24 }}>
@@ -545,7 +666,9 @@ export default function App() {
                   <span>Wallet</span>
                   <Wallet />
                 </div>
-                <strong>{employee ? shortAddress(employee.walletAddress) : "—"}</strong>
+                <strong>
+                  {employee ? shortAddress(employee.walletAddress) : "—"}
+                </strong>
                 <small>Connected employee account</small>
               </article>
 
@@ -560,32 +683,114 @@ export default function App() {
             </section>
           </section>
 
+          {/* ── Withdraw panel ── */}
           <section className="withdraw-panel glass-panel">
             <div className="panel-header">
               <div>
                 <p className="label">Withdraw liquidity</p>
-                <h2>Instant payout request</h2>
+                <h2>Instant payout</h2>
               </div>
-              <span className="chip">One-click</span>
+              <span className="chip">Gasless</span>
             </div>
 
             <p className="muted">
-              Withdraw your available unlocked balance from the live stream to wallet settlement.
+              Withdraw your available unlocked balance to wallet. Gas is
+              paid by the relayer — zero fees for employees.
             </p>
 
-            <button className="secondary-btn" type="button" onClick={handleWithdraw} disabled={!employee || withdrawing || !balance}>
-              {withdrawing ? <Loader2 className="spin" /> : <ArrowDownRight />}
+            <button
+              className="secondary-btn"
+              type="button"
+              onClick={handleWithdraw}
+              disabled={!employee || withdrawing || !balance}
+            >
+              {withdrawing ? (
+                <Loader2 className="spin" />
+              ) : (
+                <ArrowDownRight />
+              )}
               {withdrawing ? "Withdrawing…" : "Request payout"}
             </button>
 
             <div className="setting-row" style={{ marginTop: 20 }}>
-              <strong>{balance ? formatMoney(Number(balance.unlockedAmount), 2) : "--"}</strong>
+              <strong>
+                {balance
+                  ? formatMoney(Number(balance.unlockedAmount), 2)
+                  : "--"}
+              </strong>
               <small>Available unlocked amount</small>
             </div>
           </section>
         </section>
+
+        {/* ── Testnet proof section ── */}
+        <section className="testnet-proof">
+          <div className="proof-header">
+            <CheckCircle2 />
+            <h2>Verified on Stellar Testnet</h2>
+          </div>
+          <p className="proof-description">
+            YieldFlow contracts are deployed and verified on Stellar testnet.
+            All transactions below are real on-chain operations.
+          </p>
+
+          <div className="proof-grid">
+            <a
+              href={`${STELLAR_EXPERT_BASE}/contract/${TESTNET_CONTRACTS.vault}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="proof-card"
+            >
+              <div className="proof-card-header">
+                <Layers />
+                <span>Vault Contract</span>
+                <ExternalLink />
+              </div>
+              <code>{shortAddress(TESTNET_CONTRACTS.vault)}</code>
+              <small>15/85 buffer-yield split, deposit & release</small>
+            </a>
+
+            <a
+              href={`${STELLAR_EXPERT_BASE}/contract/${TESTNET_CONTRACTS.streaming}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="proof-card"
+            >
+              <div className="proof-card-header">
+                <Activity />
+                <span>Streaming Contract</span>
+                <ExternalLink />
+              </div>
+              <code>{shortAddress(TESTNET_CONTRACTS.streaming)}</code>
+              <small>Time-linear unlock, withdrawal accounting</small>
+            </a>
+
+            {TESTNET_TRANSACTIONS.map((tx) => (
+              <a
+                key={tx.hash}
+                href={`${STELLAR_EXPERT_BASE}/tx/${tx.hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="proof-card proof-tx"
+              >
+                <div className="proof-card-header">
+                  <CheckCircle2 />
+                  <span>{tx.label}</span>
+                  <ExternalLink />
+                </div>
+                <code>{tx.hash.slice(0, 16)}…</code>
+              </a>
+            ))}
+          </div>
+
+          <p className="proof-footer">
+            Built with Soroban smart contracts · Stellar SDK ·
+            Passkey Kit · DeFindex architecture
+          </p>
+        </section>
       </main>
 
+      {/* ── Toast notifications ── */}
       <div className="toast-stack">
         {notifications.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.type}`}>
