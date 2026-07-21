@@ -3,14 +3,14 @@
  */
 
 let stellarSdk;
-let Contract, TransactionBuilder, SorobanRpc, Address, nativeToScVal, scValToNative, Keypair;
+let Contract, TransactionBuilder, rpc, Address, nativeToScVal, scValToNative, Keypair;
 
 // Lazy-load stellar-sdk to catch import errors gracefully
 async function ensureSdk() {
   if (stellarSdk) return;
   try {
     stellarSdk = await import("@stellar/stellar-sdk");
-    ({ Keypair, Contract, TransactionBuilder, SorobanRpc, Address, nativeToScVal, scValToNative } = stellarSdk);
+    ({ Keypair, Contract, TransactionBuilder, rpc, Address, nativeToScVal, scValToNative } = stellarSdk);
   } catch (err) {
     throw new Error(`Failed to load @stellar/stellar-sdk: ${err.message}`);
   }
@@ -58,7 +58,7 @@ function formatNextPayday(endTime) {
 const BASE_FEE = "1000000";
 
 function createContractClient({ contractId, rpcUrl, networkPassphrase, publicKey, keypair }) {
-  const server = new SorobanRpc.Server(rpcUrl);
+  const server = new rpc.Server(rpcUrl);
   const contract = new Contract(contractId);
 
   return {
@@ -73,7 +73,7 @@ function createContractClient({ contractId, rpcUrl, networkPassphrase, publicKey
         .build();
 
       const sim = await server.simulateTransaction(tx);
-      if (SorobanRpc.Api.isSimulationError(sim)) {
+      if (rpc.Api.isSimulationError(sim)) {
         throw new Error(`Simulation failed: ${sim.error || "unknown error"}`);
       }
 
@@ -100,11 +100,11 @@ function createContractClient({ contractId, rpcUrl, networkPassphrase, publicKey
         .build();
 
       const sim = await server.simulateTransaction(tx);
-      if (SorobanRpc.Api.isSimulationError(sim)) {
+      if (rpc.Api.isSimulationError(sim)) {
         throw new Error(`Simulation failed: ${sim.error || "unknown error"}`);
       }
 
-      const prepared = SorobanRpc.assembleTransaction(tx, sim).build();
+      const prepared = rpc.assembleTransaction(tx, sim).build();
       prepared.sign(keypair);
 
       const sendResult = await server.sendTransaction(prepared);
@@ -235,44 +235,40 @@ function mapBalance(balance) {
 /* â”€â”€ Vercel handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function resolveApiPath(req, url) {
-  // Catch-all route: /api/[[...slug]]
-  const slug = req.query?.slug;
-  if (Array.isArray(slug) && slug.length > 0) {
-    return `/api/${slug.map(String).join("/")}`;
-  }
-  if (typeof slug === "string" && slug.length > 0) {
-    return `/api/${slug}`;
-  }
-
-  // Common Vercel/proxy headers with original path
   const headerCandidates = [
-    req.headers["x-forwarded-uri"],
     req.headers["x-invoke-path"],
+    req.headers["x-forwarded-uri"],
+    req.headers["x-vercel-original-path"],
     req.headers["x-matched-path"],
-    req.headers["x-vercel-forwarded-for"] && null,
   ].filter(Boolean);
 
   for (const candidate of headerCandidates) {
     if (typeof candidate === "string") {
       const clean = candidate.split("?")[0];
-      if (clean === "/api" || clean.startsWith("/api/")) return clean.replace(/\/$/, "") || "/api";
+      if (clean === "/api" || clean.startsWith("/api/")) {
+        return clean.replace(/\/$/, "") || "/api";
+      }
     }
   }
 
   let path = url.pathname || "/";
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
 
-  // Single-function rewrite fallback: /api?path=stats
   if ((path === "/api" || path === "/") && url.searchParams.has("path")) {
     const p = String(url.searchParams.get("path") || "").replace(/^\/+/, "");
     return p.startsWith("api/") ? `/${p}` : `/api/${p}`;
   }
 
-  // If request lands on bare /api but original URL still has suffix in raw url
   const raw = String(req.url || "");
   const rawPath = raw.split("?")[0];
   if (rawPath.startsWith("/api/")) {
     return rawPath.replace(/\/$/, "") || "/api";
+  }
+
+  // Catch-all may receive paths without /api prefix
+  if (path && path !== "/" && !path.startsWith("/api")) {
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    return (`/api${normalized}`).replace(/\/$/, "") || "/api";
   }
 
   return path || "/api";

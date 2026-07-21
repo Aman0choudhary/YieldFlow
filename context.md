@@ -183,3 +183,13 @@ http://127.0.0.1:8787/api/employee/balance?employeeId=GBPDU4S2VIXMNW4VUZKNFHQ7CH
 - **Frontend (`frontend/`)**: Deployed to `https://yieldflow-frontend.vercel.app`. Rewrote the SDK at `frontend/src/sdk/yieldflow-sdk.ts` to replace mock data with `fetch()` calls to the backend's API endpoints.
 - Environment: Frontend passes `VITE_API_URL` pointing to the backend. Backend uses `YIELDFLOW_SIGNER_SECRET` for state-changing deposits and withdrawals.
 - **Contract Optimizations**: Ran `stellar contract build --optimize` for Mainnet Grants readiness. Streaming WASM optimized to `6738` bytes; vault WASM optimized to `8919` bytes. This ensures extremely low deployment costs (estimated at ~5 XLM per contract to be safe).
+
+## Full MVP Deploy Hardening (2026-07-22)
+
+- Fixed production API bug: stellar-sdk v14 uses `rpc.Server` (not `SorobanRpc.Server`). Live site was returning 500 on stats/employer/deposit.
+- Fixed API routing so nested paths (`/api/employee/*`) rewrite to the single serverless function with path preserved.
+- Added `scripts/deploy-full-mvp.ps1` for one-shot production deploy + env.
+- Added `scripts/deploy-mainnet.ps1` + `config/mainnet-usdc.json` so mainnet contract deploy is ready when XLM arrives.
+- Vercel CLI auth on this machine currently has an **expired/invalid token** — run `npx vercel login` once, then `scripts/deploy-full-mvp.ps1`.
+- Target live URL remains `https://yieldflow-frontend.vercel.app/` (frontend + API same origin).
+- Deadline: everything production-working before **2026-07-25**; mainnet contracts only after funded XLM.

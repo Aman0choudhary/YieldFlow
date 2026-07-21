@@ -1,0 +1,9 @@
+{
+  "network": "mainnet",
+  "rpcUrl": "https://mainnet.sorobanrpc.com",
+  "networkPassphrase": "Public Global Stellar Network ; September 2015",
+  "usdcAssetCode": "USDC",
+  "usdcAssetIssuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+  "usdcTokenContractId": "REPLACE_WITH_MAINNET_USDC_SAC",
+  "notes": "Circle mainnet USDC issuer above is the common Stellar USDC issuer. Confirm SAC id with stellar contract id asset before deploy."
+}
