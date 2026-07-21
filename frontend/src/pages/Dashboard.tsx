@@ -7,6 +7,7 @@
   Loader2,
   ShieldCheck,
   Sparkles,
+  Users,
   Wallet,
 } from "lucide-react";
 import type { EmployeeBalance, EmployeeSession, EmployerConnection } from "../sdk/yieldflow-sdk";
@@ -14,6 +15,8 @@ import type { DisplayStats } from "../types";
 import { formatMoney, shortAddress } from "../utils";
 import { useRipple } from "../animation-utils";
 import { ActivityList } from "../components/activity/ActivityList";
+import { MetricCard } from "../components/metrics/MetricCard";
+import { TreasuryBreakdown } from "../components/metrics/TreasuryBreakdown";
 import type { ActivityItem } from "../sdk/yieldflow-sdk";
 
 type DashboardProps = {
@@ -51,44 +54,52 @@ export default function Dashboard({
   const ripple = useRipple();
   const activeProof = employee ? shortAddress(employee.walletAddress) : "Connect to begin";
   const recentActivity = activity.slice(0, 3);
+  const poolNum = Number(String(displayStats.totalPool).replace(/[^0-9.]/g, "")) || 0;
+  const yieldNum = Number(String(displayStats.yieldEarned).replace(/[^0-9.]/g, "")) || 0;
+  const bufferNum = Number(String(displayStats.bufferAmount).replace(/[^0-9.]/g, "")) || 0;
 
   return (
     <section className="dashboard-grid page-enter">
-      <article className="metric-card accent">
-        <div className="metric-top">
-          <span>Total pool</span>
-          <Sparkles size={16} />
-        </div>
-        <strong>{displayStats.totalPool}</strong>
-        <small>Capital under yield allocation</small>
-      </article>
+      <MetricCard
+        label="Total pool"
+        value={poolNum}
+        digits={2}
+        hint="Capital under yield allocation"
+        accent
+        badge={<Sparkles size={16} />}
+      />
+      <MetricCard
+        label="Yield earned"
+        value={yieldNum}
+        digits={2}
+        hint="Accumulated from underlying streams"
+        badge={<span>{displayStats.projectedApy}% APY</span>}
+      />
+      <MetricCard
+        label="Buffer reserve"
+        value={bufferNum}
+        digits={2}
+        hint="Liquidity kept for instant withdrawals"
+        badge={<span>{displayStats.bufferPercent}%</span>}
+      />
+      <MetricCard
+        label="Active employees"
+        value={displayStats.activeEmployees}
+        digits={0}
+        display={String(displayStats.activeEmployees)}
+        hint="Staff receiving streamed pay"
+        badge={
+          <span>
+            <Users size={14} /> Live
+          </span>
+        }
+      />
 
-      <article className="metric-card">
-        <div className="metric-top">
-          <span>Yield earned</span>
-          <span>{displayStats.projectedApy}% APY</span>
-        </div>
-        <strong>{displayStats.yieldEarned}</strong>
-        <small>Accumulated from underlying streams</small>
-      </article>
-
-      <article className="metric-card">
-        <div className="metric-top">
-          <span>Buffer reserve</span>
-          <span>{displayStats.bufferPercent}%</span>
-        </div>
-        <strong>{displayStats.bufferAmount}</strong>
-        <small>Liquidity kept for instant withdrawals</small>
-      </article>
-
-      <article className="metric-card">
-        <div className="metric-top">
-          <span>Active employees</span>
-          <span>Live</span>
-        </div>
-        <strong>{displayStats.activeEmployees}</strong>
-        <small>Staff receiving streamed pay</small>
-      </article>
+      <TreasuryBreakdown
+        displayStats={displayStats}
+        balance={balance}
+        liveBalance={liveBalance}
+      />
 
       <section className="flow-panel glass-panel">
         <div className="panel-header">

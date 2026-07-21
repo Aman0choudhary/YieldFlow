@@ -8,7 +8,7 @@ There are two closely related entry points during the dual-path MVP:
 | Path | Entry | Status |
 |---|---|---|
 | Frontend demo (Vite) | `sdk/yieldflow-sdk.ts` → mock or stellar TS surface | mock default |
-| Integration / generated clients | `sdk/yieldflow-sdk.js` + `sdk/generated/*` | Aman path |
+| Integration / generated clients | `sdk/yieldflow-sdk.chain.js` + `sdk/generated/*` | Aman path |
 | Day-1 mock (JS) | `sdk/mock-sdk.js` | shape checks via `scripts/check-sdk-contract.js` |
 
 All functions are async and return plain JSON / serializable objects.
@@ -22,7 +22,7 @@ All functions are async and return plain JSON / serializable objects.
 
 Helpers: `getSdkMeta()` / `getSdkInfo()`.
 
-The real JS SDK wrapper depends on generated Stellar bindings in `sdk/generated/`. Those packages must be built before `sdk/yieldflow-sdk.js` can talk to deployed contracts.
+The real JS SDK wrapper depends on generated Stellar bindings in `sdk/generated/`. Those packages must be built before `sdk/yieldflow-sdk.chain.js` can talk to deployed contracts.
 
 ## Rules
 
@@ -146,7 +146,7 @@ getSdkInfo(): Promise<SdkMeta>
 
 1. Deploy `vault`, `streaming`, `defindex_router` (`npm run deploy:testnet`).
 2. Write contract IDs to `deployments/testnet.json`, `config/testnet-usdc.json`, `sdk/config.ts`.
-3. Implement RPC invokes inside `sdk/stellar-sdk.ts` (and keep `sdk/yieldflow-sdk.js` aligned).
+3. Implement RPC invokes inside `sdk/stellar-sdk.ts` (and keep `sdk/yieldflow-sdk.chain.js` aligned).
 4. Set `VITE_YIELDFLOW_SDK=stellar` and rebuild the frontend.
 5. Keep passkey optional with mock fallback for demos.
 

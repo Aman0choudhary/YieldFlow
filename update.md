@@ -507,3 +507,5 @@ Reviewer path in **2–3 minutes**:
 
 | 2026-07-21 | Phases 3 readiness + 4 polish: SDK mode swap, stellar surface, health strip, demo reset |
 
+
+| 2026-07-21 | Full PRD execution pass: treasury breakdown, stellar path hardening, keyboard polish |

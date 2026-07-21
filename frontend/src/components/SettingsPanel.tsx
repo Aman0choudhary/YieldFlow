@@ -54,6 +54,10 @@ export function SettingsPanel({
           rows. Use before a live demo.
         </p>
 
+        <p className="muted">
+          Keyboard: 1 Dashboard · 2 Flows · 3 Activity · Esc close · ? settings
+        </p>
+
         <div className="confirm-actions">
           <button
             className="primary-btn"
@@ -70,7 +74,7 @@ export function SettingsPanel({
         </div>
 
         <p className="muted settings-hint">
-          <Settings2 size={12} /> Phase 3 live chain uses the same UI once contract IDs are configured.
+          <Settings2 size={12} /> Phase 3 live chain uses the same UI once contract IDs + signer are configured.
         </p>
       </aside>
     </div>

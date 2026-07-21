@@ -37,7 +37,7 @@ These are **not** live RPC yet. The frontend continues to import only the SDK (m
 
 1. Deploy contracts to testnet (`npm run deploy:testnet` / `scripts/deploy-testnet.ps1`).
 2. Write IDs into `deployments/testnet.json`, `config/testnet-usdc.json`, and `sdk/config.ts`.
-3. Implement RPC invokes in `sdk/stellar-sdk.ts` / `sdk/yieldflow-sdk.js` (same exports as mock).
+3. Implement RPC invokes in `sdk/stellar-sdk.ts` / `sdk/yieldflow-sdk.chain.js` (same exports as mock).
 4. Set `VITE_YIELDFLOW_SDK=stellar` for the Vite UI and rebuild.
 5. Keep lifecycle states identical for UI: `submitted | pending | confirmed | failed`.
 6. Passkey / smart account stays inside the SDK with mock fallback for demos.

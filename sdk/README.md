@@ -1,11 +1,11 @@
-# YieldFlow SDK
+﻿# YieldFlow SDK
 
 This folder is Aman-owned. It is the bridge between blockchain complexity and the frontend contract.
 
 ## Files
 
 - `mock-sdk.js`: stable mock API for UI work.
-- `yieldflow-sdk.js`: real SDK wrapper around generated Stellar contract clients.
+- `yieldflow-sdk.chain.js`: real SDK wrapper around generated Stellar contract clients.
 - `generated/streaming`: generated TypeScript package for the streaming contract.
 - `generated/vault`: generated TypeScript package for the vault contract.
 
@@ -32,7 +32,7 @@ npm.cmd run build
 ## Configure Real SDK
 
 ```js
-import sdk from "./yieldflow-sdk.js";
+import sdk from "./yieldflow-sdk.chain.js";
 
 await sdk.configureYieldFlowSdk({
   rpcUrl: "https://soroban-testnet.stellar.org",

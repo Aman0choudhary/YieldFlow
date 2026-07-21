@@ -109,16 +109,15 @@ Every screen should feel:
 - Extended mock APIs: `previewDeposit`, `getStreamPhysics`, `getTransactionDetail`, `getFlowGraph`, `resetDemo`  
 - Contract stubs planned: streaming, vault, defindex_router  
 
-### What is broken / incomplete
+### What is broken / incomplete (updated)
 
-| Issue | Why it matters |
-|---|---|
-| `App.tsx` still runs a large monolith UI | Advanced pages/hooks are not the live product |
-| Dual frontend risk | Building “v2 polish” on the old path wastes work |
-| Tab ownership incomplete in live UI | Product still feels like basic SaaS |
-| Activity can be dual-sourced | SDK localStorage + React push can desync |
-| No real chain yet | Demo must stay mock-complete and trustworthy |
-| No real employee directory / time-series DB | Analytics/search/heatmap must wait |
+| Issue | Why it matters | Status |
+|---|---|---|
+| Live Stellar RPC + wallet signer | Testnet settlement not default | Open (Phase 3) |
+| Passkey Kit real integration | Still simulated | Open (Phase 3) |
+| No employee directory / time-series DB | Analytics deferred | Deferred (Phase 4) |
+| Monolith App / dual page risk | Was blocking v2 | Resolved |
+| Tab ownership / activity dual-write | Product integrity | Resolved |
 
 ### Important architecture fact
 
@@ -650,12 +649,13 @@ These remain valid future enhancements, not current commitments.
 
 ## 18. Immediate next actions
 
-1. Execute **Phase 0**: wire `App.tsx` to `pages/*` + `hooks/*`  
-2. Delete or isolate dead monolith render path  
-3. Verify Journey A on the wired app  
-4. Then Phase 1 living core + trust UI  
-5. Log progress in `context.md`  
-6. Keep this PRD and `update.md` aligned; if they conflict, **this PRD v2.1 wins for scope**, `update.md` remains useful for tactical sequencing detail  
+**Active v2 mock product is implemented on `frontend-aditya`.** Remaining:
+
+1. Deploy vault + streaming on testnet; write contract IDs (`deployments/testnet.json`, env `VITE_*_CONTRACT_ID`)
+2. Wire wallet `signTransaction` + `sdk/yieldflow-sdk.chain.js` for live writes
+3. Complete Passkey Kit for real employee auth
+4. Keep mock as default demo path until (1–3) are solid
+5. Log progress in `context.md`; this PRD remains scope authority
 
 ---
 
@@ -691,4 +691,4 @@ Employer deposit
 
 Every feature either strengthens that loop or waits.
 
-**Status:** Ready for Phase 0 execution.
+**Status:** Phases 0–2 product surface complete on mock; Phase 3 live Stellar remaining; Phase 4 expansions deferred.

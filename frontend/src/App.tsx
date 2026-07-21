@@ -124,15 +124,30 @@ export default function App() {
   /* -- keyboard: Escape closes overlays -- */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setPendingConfirm(null);
-      setReceipt(null);
-      setSettingsOpen(false);
-      setDetailItem(null);
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (event.key === "Escape") {
+        setPendingConfirm(null);
+        setReceipt(null);
+        setSettingsOpen(false);
+        setDetailItem(null);
+        return;
+      }
+      if (typing) return;
+      if (event.key === "1") navigate("dashboard");
+      if (event.key === "2") navigate("flows");
+      if (event.key === "3") navigate("activity");
+      if (event.key === "?" || (event.shiftKey && event.key === "/")) {
+        setSettingsOpen(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setDetailItem]);
+  }, [setDetailItem, navigate]);
 
   /* -- handlers -- */
   const onLogin = useCallback(async () => {

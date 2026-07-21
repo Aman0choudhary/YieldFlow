@@ -432,16 +432,20 @@ export default function Flows({
         </button>
       </section>
 
-      <section className="chart-panel glass-panel">
+            <section className="chart-panel glass-panel">
         <div className="panel-header">
           <div>
             <p className="label">Scenario mode</p>
             <h2>What if I fund X?</h2>
           </div>
           <span className="chip">
-            <FlaskConical size={12} /> Mock calc
+            <FlaskConical size={12} /> Employer value
           </span>
         </div>
+
+        <p className="muted">
+          Employer savings framing: idle payroll on the yield route keeps working until it streams.
+        </p>
 
         <label className="field-label" htmlFor="scenario-amount">
           Hypothetical deposit (USDC)
@@ -459,17 +463,28 @@ export default function Flows({
             <strong>
               {scenario ? formatMoney(Number(scenario.bufferShare), 2) : "--"}
             </strong>
-            <small>Would go to buffer</small>
+            <small>Would go to buffer (instant withdrawals)</small>
           </div>
           <div className="setting-row">
             <strong>
               {scenario ? formatMoney(Number(scenario.yieldShare), 2) : "--"}
             </strong>
-            <small>Would go to yield route</small>
+            <small>Would go to yield route (working capital)</small>
           </div>
           <div className="setting-row">
             <strong>{scenario?.projectedApy ?? "--"}%</strong>
-            <small>Projected APY (diminishing returns demo)</small>
+            <small>Projected APY on yield-routed share</small>
+          </div>
+          <div className="setting-row">
+            <strong>
+              {scenario
+                ? formatMoney(
+                    (Number(scenario.yieldShare) * Number(scenario.projectedApy || 0)) / 100 / 12,
+                    2,
+                  )
+                : "--"}
+            </strong>
+            <small>Illustrative monthly yield (demo math)</small>
           </div>
         </div>
       </section>

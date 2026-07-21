@@ -54,7 +54,7 @@ Frontend TypeScript demo path (mock-first) also exposes activity / preview / str
 - `PLAN.md` exists and contains the original project plan.
 - `context.md` is the living build log and decision record.
 - `sdk/mock-sdk.js` / `sdk/mock-sdk.ts` contain frontend-ready mock SDK surfaces.
-- `sdk/yieldflow-sdk.js` is a configurable wrapper around generated contract clients (Aman path).
+- `sdk/yieldflow-sdk.chain.js` is a configurable wrapper around generated contract clients (Aman path).
 - `sdk/yieldflow-sdk.ts` is the Vite frontend entry with mock/stellar mode switch.
 - `docs/sdk-contract.md` documents the SDK response shapes and mode selection.
 - `scripts/check-sdk-contract.js` verifies the mock SDK returns the expected shape.
@@ -94,7 +94,7 @@ Frontend TypeScript demo path (mock-first) also exposes activity / preview / str
 - 2026-07-11: Added PowerShell scripts for testnet identity setup and two-contract deployment/initialization.
 - 2026-07-11: Generated Stellar TypeScript bindings from local WASMs under `sdk/generated/`.
 - 2026-07-11: Replaced the real SDK placeholder with a configurable wrapper around generated contract clients.
-- 2026-07-11: Installed and built generated `vault` and `streaming` SDK packages; import smoke test for `sdk/yieldflow-sdk.js` passes.
+- 2026-07-11: Installed and built generated `vault` and `streaming` SDK packages; import smoke test for `sdk/yieldflow-sdk.chain.js` passes.
 - 2026-07-11: Added operational scripts for deposit, stream creation, and demo withdrawal against deployed contract ids.
 - 2026-07-15: Verified existing Stellar testnet USDC asset activity, derived SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`, created test identities, and established employer/employee USDC trustlines.
 - 2026-07-15: Circle faucet funding requires manual browser/reCAPTCHA action for `employer-test`.
@@ -134,3 +134,28 @@ Frontend TypeScript demo path (mock-first) also exposes activity / preview / str
 - Build: `npm --prefix frontend run build` passes.
 - Structural: `npm run verify:demo` passes.
 - Default runtime remains **mock** until contract IDs + RPC are live.
+
+---
+
+## 2026-07-21 — Full PRD phase execution pass
+
+### Phases 0–2 (product)
+- Dashboard treasury breakdown (Available / Streaming / Locked / Yield)
+- Animated KPI metric cards
+- Flows employer savings framing + illustrative monthly yield
+- Keyboard shortcuts: 1/2/3 tabs, ? settings, Esc overlays
+- Settings keyboard help copy
+
+### Phase 3 (Stellar readiness)
+- `sdk/config.ts` reads `VITE_VAULT_CONTRACT_ID`, `VITE_STREAMING_CONTRACT_ID`, etc.
+- `sdk/stellar-sdk.ts` maps frontend string domain to optional live `yieldflow-sdk.chain.js` clients; graceful failed writes without signer; activity helpers retained
+- Vite env defines for contract IDs
+
+### Phase 4
+- Deferred domain expansions not built (analytics suite, AI, RBAC, heatmap)
+- Lightweight keyboard navigation polish only
+
+### Verification
+- Run `npm --prefix frontend run build`
+- Default remains mock (`VITE_YIELDFLOW_SDK=mock`)
+
