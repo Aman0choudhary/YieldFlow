@@ -52,6 +52,12 @@ const config = {
     process.env.YIELDFLOW_BLEND_POOL_ID || "CAPBMXIQTICKWFPWFDJWMAKBXBPJZUKLNONQH3MLPLLBKQ643CYN5PRW",
   tokenContractId:
     process.env.YIELDFLOW_TOKEN_CONTRACT_ID || "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+  defindexVaultId:
+    process.env.YIELDFLOW_DEFINDEX_VAULT_ID || "CBMVK2JK6NTOT2O4HNQAIQFJY232BHKGLIMXDVQVHIIZKDACXDFZDWHN",
+  defindexStrategyId:
+    process.env.YIELDFLOW_DEFINDEX_STRATEGY_ID || "CALLOM5I7XLQPPOPQMYAHUWW4N7O3JKT42KQ4ASEEVBXDJQNJOALFSUY",
+  defindexFactoryId:
+    process.env.YIELDFLOW_DEFINDEX_FACTORY_ID || "CDSCWE4GLNBYYTES2OCYDFQA2LLY4RBIAX6ZI32VSUXD7GO6HRPO4A32",
   employeeAddress:
     process.env.YIELDFLOW_EMPLOYEE_ADDRESS || "GBPDU4S2VIXMNW4VUZKNFHQ7CHAU2RZA7DGPY4K77CZFGK6LMESZWSL4",
   sessionSecret:
@@ -67,6 +73,7 @@ let vault = null;
 let streaming = null;
 let blend = null;
 let token = null;
+let defindex = null;
 let signerKeypair = null;
 let publicKey = null;
 
@@ -233,6 +240,7 @@ function initClients() {
   streaming = createContractClient({ ...clientOpts, contractId: config.streamingContractId });
   blend = createContractClient({ ...clientOpts, contractId: config.blendPoolId });
   token = createContractClient({ ...clientOpts, contractId: config.tokenContractId });
+  defindex = createContractClient({ ...clientOpts, contractId: config.defindexVaultId });
 }
 
 function issueSession(employeeId) {
@@ -328,6 +336,52 @@ async function liveBlendValue(yieldPrincipalBase) {
   }
 }
 
+async function fetchDefindexOverview() {
+  try {
+    const [assets, funds, fees, name, symbol] = await Promise.all([
+      defindex.simulate("get_assets"),
+      defindex.simulate("fetch_total_managed_funds"),
+      defindex.simulate("get_fees").catch(() => null),
+      defindex.simulate("name").catch(() => "DeFindex Vault"),
+      defindex.simulate("symbol").catch(() => "DFXV"),
+    ]);
+    const first = Array.isArray(funds) ? funds[0] : null;
+    const tvl = BigInt(first?.total_amount || first?.totalAmount || 0);
+    const idle = BigInt(first?.idle_amount || first?.idleAmount || 0);
+    const invested = BigInt(first?.invested_amount || first?.investedAmount || 0);
+    const strategy =
+      (Array.isArray(assets) && assets[0]?.strategies?.[0]) ||
+      first?.strategy_allocations?.[0] ||
+      null;
+    return {
+      enabled: true,
+      vaultId: config.defindexVaultId,
+      factoryId: config.defindexFactoryId,
+      strategyId: config.defindexStrategyId,
+      name: name || "DeFindex Vault",
+      symbol: symbol || "DFXV",
+      tvl: fromBaseUnits(tvl),
+      idle: fromBaseUnits(idle),
+      invested: fromBaseUnits(invested),
+      strategyName: strategy?.name || "USDC Blend Strategy",
+      strategyAddress: strategy?.address || strategy?.strategy_address || config.defindexStrategyId,
+      fees: fees
+        ? { vaultBps: Number(fees[0] ?? fees.vault ?? 0), protocolBps: Number(fees[1] ?? fees.protocol ?? 0) }
+        : null,
+      assetNote:
+        "DeFindex testnet USDC vault asset is Blend USDC; YieldFlow payroll currently yields via direct Blend on Circle USDC.",
+      stack: "defindex -> blend_strategy",
+    };
+  } catch (e) {
+    return {
+      enabled: false,
+      vaultId: config.defindexVaultId,
+      error: String(e.message || e),
+      stack: "defindex -> blend_strategy",
+    };
+  }
+}
+
 async function mapStats(stats) {
   const yieldPrincipal = BigInt(stats?.yield_principal || 0);
   const buffer = BigInt(stats?.buffer_balance || 0);
@@ -335,6 +389,7 @@ async function mapStats(stats) {
   const liveYield = blendLive.liveValue;
   const yieldEarned = liveYield > yieldPrincipal ? liveYield - yieldPrincipal : 0n;
   const totalPool = buffer + liveYield;
+  const defindexOverview = await fetchDefindexOverview();
   return {
     totalPool: fromBaseUnits(totalPool),
     yieldEarned: fromBaseUnits(yieldEarned),
@@ -349,6 +404,12 @@ async function mapStats(stats) {
     blendPoolId: config.blendPoolId,
     totalDeposited: fromBaseUnits(stats?.total_deposited || 0),
     totalReleased: fromBaseUnits(stats?.total_released || 0),
+    yieldStack: {
+      payrollRoute: "circle_usdc -> yieldflow_vault -> blend_pool",
+      strategyLayer: "defindex_usdc_vault -> blend_strategy (live market reference)",
+      activeYieldEngine: stats?.blend_enabled ? "blend_direct" : "idle",
+    },
+    defindex: defindexOverview,
   };
 }
 
@@ -408,6 +469,7 @@ export async function handleRequest(req, res) {
         blendPoolId: config.blendPoolId,
         signerConfigured: Boolean(config.signerSecret && !String(config.signerSecret).startsWith("SBXXX")),
         passkeyAuth: true,
+        defindexVaultId: config.defindexVaultId,
       });
     }
 
@@ -435,6 +497,10 @@ export async function handleRequest(req, res) {
     if (req.method === "GET" && path === "/api/stats") {
       const result = await vault.simulate("stats");
       return sendJson(res, await mapStats(result));
+    }
+
+    if (req.method === "GET" && path === "/api/defindex") {
+      return sendJson(res, await fetchDefindexOverview());
     }
 
     if (req.method === "GET" && path === "/api/activity") {

@@ -9,6 +9,23 @@ export type EmployerConnection = {
   connectedAt?: string;
 };
 
+export type DefindexOverview = {
+  enabled: boolean;
+  vaultId?: string;
+  factoryId?: string;
+  strategyId?: string;
+  name?: string;
+  symbol?: string;
+  tvl?: string;
+  idle?: string;
+  invested?: string;
+  strategyName?: string;
+  strategyAddress?: string;
+  stack?: string;
+  assetNote?: string;
+  error?: string;
+};
+
 export type EmployerStats = {
   totalPool: number;
   yieldEarned: number;
@@ -20,6 +37,12 @@ export type EmployerStats = {
   yieldRoutePercent?: number;
   activeEmployees?: number;
   projectedApy?: string;
+  yieldStack?: {
+    payrollRoute?: string;
+    strategyLayer?: string;
+    activeYieldEngine?: string;
+  };
+  defindex?: DefindexOverview;
 };
 
 export type EmployeeSession = {

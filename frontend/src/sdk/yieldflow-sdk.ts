@@ -111,6 +111,8 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       projectedApy?: string;
       blendEnabled?: boolean;
       yieldLiveValue?: string | number;
+      yieldStack?: EmployerStats["yieldStack"];
+      defindex?: EmployerStats["defindex"];
     }>("/api/stats");
 
     const totalPool = toNumber(raw.totalPool);
@@ -128,6 +130,8 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       yieldRoutePercent: raw.yieldRoutePercent,
       activeEmployees: raw.activeEmployees ?? 1,
       projectedApy: raw.projectedApy ?? "0.0",
+      yieldStack: raw.yieldStack,
+      defindex: raw.defindex,
     };
   }
 
@@ -298,3 +302,4 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
 
 export const sdk: YieldFlowSDK = new LiveYieldFlowSDK();
 export default sdk;
+

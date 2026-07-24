@@ -1,0 +1,8 @@
+﻿{
+  "network": "testnet",
+  "defindex_factory": "CDSCWE4GLNBYYTES2OCYDFQA2LLY4RBIAX6ZI32VSUXD7GO6HRPO4A32",
+  "usdc_defindex_vault": "CBMVK2JK6NTOT2O4HNQAIQFJY232BHKGLIMXDVQVHIIZKDACXDFZDWHN",
+  "usdc_blend_strategy": "CALLOM5I7XLQPPOPQMYAHUWW4N7O3JKT42KQ4ASEEVBXDJQNJOALFSUY",
+  "defindex_usdc_token": "CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU",
+  "notes": "Public DeFindex testnet USDC vault uses Blend-issued USDC (CAQCF...), not Circle testnet USDC (CBIELT...). YieldFlow payroll currently earns on Circle USDC via direct Blend pool CAPBMX. DeFindex is integrated for live strategy/TVL data and is the target router when asset IDs align (mainnet Circle USDC or after a swap bridge)."
+}

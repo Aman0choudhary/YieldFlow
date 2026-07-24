@@ -127,7 +127,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
         <div className="label" style={{ color: "var(--grey-300)" }}>
           Employer {employerAddress ? `${employerAddress.slice(0, 6)}â€¦${employerAddress.slice(-4)}` : "â€”"}
           {" Â· "}
-          <span style={{ color: "var(--theme-accent)" }}>Blend-backed testnet vault</span>
+          <span style={{ color: "var(--theme-accent)" }}>Blend + DeFindex strategy stack</span>
         </div>
         <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("approvals")}>
           Manage Stream Approvals â†’
@@ -139,7 +139,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
           index="01"
           eyebrow="TREASURY VAULT"
           thesis="Corporate payroll capital actively generating yield."
-          paragraph="Live vault stats from Soroban + Blend lending pool on Stellar testnet."
+          paragraph="Live vault stats: buffer stays liquid, yield leg earns on Blend. DeFindex USDC vault is the strategy-layer reference (DeFindex → Blend)." 
         />
 
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
@@ -252,13 +252,54 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
         </div>
       </section>
 
+      
+      <section className="section-block">
+        <SectionHeader
+          index="01B"
+          eyebrow="DEFINDEX STRATEGY LAYER"
+          thesis="DeFindex routes idle capital into Blend strategies."
+          paragraph={
+            stats.defindex?.enabled
+              ? `Live DeFindex vault ${stats.defindex.name || ""} (${stats.defindex.symbol || "DFXV"}) with strategy "${stats.defindex.strategyName || "Blend"}". Payroll currently yields via direct Blend on Circle USDC; DeFindex is the composable strategy router for aligned assets.`
+              : "DeFindex vault stats unavailable right now. Payroll yield still runs on direct Blend."
+          }
+        />
+        <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
+          <div className="df-cell grid-3-cell slide-up">
+            <span className="label" style={{ color: "var(--grey-300)" }}>DeFindex TVL</span>
+            <h2 style={{ marginTop: "var(--spacer-12)" }}>
+              {stats.defindex?.enabled ? money(Number(stats.defindex.tvl || 0)) : "—"}
+            </h2>
+          </div>
+          <div className="df-cell grid-3-cell slide-up">
+            <span className="label" style={{ color: "var(--grey-300)" }}>Strategy</span>
+            <h3 style={{ marginTop: "var(--spacer-12)" }}>
+              {stats.defindex?.strategyName || "USDC Blend Strategy"}
+            </h3>
+            <p className="label" style={{ marginTop: "8px", color: "var(--theme-accent)" }}>
+              {stats.yieldStack?.activeYieldEngine === "blend_direct" ? "Active payroll engine: Blend direct" : "Yield engine idle"}
+            </p>
+          </div>
+          <div className="df-cell grid-3-cell slide-up">
+            <span className="label" style={{ color: "var(--grey-300)" }}>Stack</span>
+            <h3 style={{ marginTop: "var(--spacer-12)", fontFamily: "NON Natural Mono", fontSize: "14px" }}>
+              {stats.defindex?.stack || "defindex → blend"}
+            </h3>
+            <p className="label" style={{ marginTop: "8px", color: "var(--grey-300)" }}>
+              Idle {stats.defindex?.idle ? money(Number(stats.defindex.idle)) : "—"} · Invested{" "}
+              {stats.defindex?.invested ? money(Number(stats.defindex.invested)) : "—"}
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* APY PERFORMANCE CHART SECTION */}
       <section className="section-block">
         <SectionHeader
           index="02"
           eyebrow="YIELD PERFORMANCE"
           thesis="Real-time APY yield accumulation curve."
-          paragraph="Headline APY is estimated from the live Blend reserve curve. Chart shape is illustrative; numbers on the cards are live from chain."
+          paragraph="Headline APY is estimated from the live Blend reserve curve used by payroll yield. DeFindex exposes the same Blend strategy class as a vault layer. Chart shape is illustrative."
         />
 
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
