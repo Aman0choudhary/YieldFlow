@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Modal } from './Modal';
 
 interface MenuOverlayProps {
@@ -20,6 +20,7 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
     { index: '03', label: 'EMPLOYER TREASURY VAULT', view: 'employer' },
     { index: '04', label: 'EMPLOYEE STREAMING PORTAL', view: 'employee' },
     { index: '05', label: 'APPROVALS & AUTHORIZATIONS', view: 'approvals' },
+    { index: '06', label: 'ADMIN CONSOLE', view: 'admin' },
   ];
 
   const handleSelect = (item: typeof menuItems[0]) => {
@@ -102,7 +103,7 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
                 }}
                 onClick={onClose}
               >
-                CLOSE [✕]
+                CLOSE [âœ•]
               </button>
             </div>
 
@@ -272,3 +273,4 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
     </>
   );
 }
+
