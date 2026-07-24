@@ -1,58 +1,31 @@
-export type TxStatus =
-  | "idle"
-  | "authenticating"
-  | "building"
-  | "submitted"
-  | "pending"
-  | "confirmed"
-  | "failed";
-
-export type EmployerConnection = {
-  address: string;
-  network?: string;
-  connectedAt?: string;
-};
-
-export type DepositPayrollResult = {
-  txHash: string;
-  status: Extract<TxStatus, "submitted" | "confirmed" | "failed">;
-  amount?: string;
-};
+export type TxStatus = { txId: string; status: 'success' | 'pending' | 'failed' };
 
 export type EmployerStats = {
-  totalPool: string;
-  yieldEarned: string;
-  bufferAmount: string;
-  bufferPercent: number;
-  yieldRoutePercent: number;
-  activeEmployees: number;
-  projectedApy: string;
-};
-
-export type EmployeeSession = {
-  employeeId: string;
-  name: string;
-  walletAddress: string;
+  totalPool: number;
+  yieldEarned: number;
+  bufferStatus: {
+    available: number;
+    earningYield: number;
+  };
 };
 
 export type EmployeeBalance = {
-  unlockedAmount: string;
-  ratePerSecond: string;
-  totalStreamed: string;
-  streamCap: string;
-  nextPayday: string;
+  unlockedAmount: number;
+  ratePerSecond: number;
 };
 
-export type WithdrawResult = {
-  txHash: string;
-  status: Extract<TxStatus, "submitted" | "confirmed" | "failed">;
-  amountReceived: string;
+export type ApprovalStatus = {
+  approved: boolean;
+  pausedSince?: number; // timestamp
 };
 
-export type ActivityItem = {
-  id: string;
-  kind: "deposit" | "stream" | "yield" | "withdraw" | "auth";
-  label: string;
-  timestamp: string;
-  amount: string;
-};
+export interface YieldFlowSDK {
+  connectEmployer(): Promise<{ address: string }>;
+  depositPayroll(amount: number): Promise<TxStatus>;
+  getEmployerStats(): Promise<EmployerStats>;
+  loginEmployee(): Promise<{ employeeId: string }>;
+  getEmployeeBalance(id: string): Promise<EmployeeBalance>;
+  withdraw(id: string): Promise<TxStatus & { amountReceived: number }>;
+  approveEmployeePeriod(id: string): Promise<{ approved: boolean }>;
+  getApprovalStatus(id: string): Promise<ApprovalStatus>;
+}
