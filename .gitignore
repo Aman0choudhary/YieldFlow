@@ -5,3 +5,7 @@ target/
 .env.local
 .DS_Store
 *.log
+
+.local-mainnet-prep-secrets.env
+*.local.env
+

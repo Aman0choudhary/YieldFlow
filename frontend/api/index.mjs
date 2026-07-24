@@ -119,6 +119,12 @@ function setCors(req, res) {
   return applyCors(res, req, config.allowedOrigin);
 }
 
+function isMainnetLabel() {
+  const label = String(config.networkLabel || process.env.YIELDFLOW_NETWORK_LABEL || "").toLowerCase();
+  const pass = String(config.networkPassphrase || "").toLowerCase();
+  return label.includes("mainnet") || pass.includes("public global stellar network");
+}
+
 function assertConfigSecurity() {
   if (!config.allowedOrigin || config.allowedOrigin === "*") {
     throw Object.assign(
@@ -138,15 +144,36 @@ function assertConfigSecurity() {
       { statusCode: 500 }
     );
   }
+  // Mainnet gate: require admin API key so browser CSRF-only mutations are not enough alone if desired
+  if (isMainnetLabel() && !config.adminApiKey) {
+    throw Object.assign(
+      new Error("Mainnet mode requires YIELDFLOW_ADMIN_API_KEY for operator mutations."),
+      { statusCode: 500 }
+    );
+  }
 }
 
-function gateMutation(req) {
+function mainnetMutationGuard(req) {
+  if (!isMainnetLabel()) return;
+  // On mainnet, require admin key for deposit/stream/rebalance (not CSRF-only)
+  const h = req.headers?.["x-yieldflow-admin-key"] || req.headers?.["X-YieldFlow-Admin-Key"] || "";
+  if (!config.adminApiKey || String(h) !== String(config.adminApiKey)) {
+    throw Object.assign(
+      new Error("Mainnet deposit/stream/rebalance require X-YieldFlow-Admin-Key."),
+      { statusCode: 403 }
+    );
+  }
+}
+
+function gateMutation(req, opts = {}) {
   rateLimit(req, { bucket: "mutate", limit: 40, windowMs: 60_000 });
-  return assertMutationAuthorized(req, {
+  const auth = assertMutationAuthorized(req, {
     allowedOrigin: config.allowedOrigin,
     sessionSecret: config.sessionSecret,
     adminKey: config.adminApiKey,
   });
+  if (opts.employerMoney) mainnetMutationGuard(req);
+  return auth;
 }
 
 function sendJson(res, body, statusCode = 200) {
@@ -534,6 +561,12 @@ export async function handleRequest(req, res) {
           csrf: true,
           withdrawRequiresSession: true,
           aiGuideConfigured: Boolean(process.env.YIELDFLOW_AI_API_KEY),
+          mainnetPrep: {
+            isMainnetLabel: isMainnetLabel(),
+            adminKeyRequiredOnMainnet: true,
+            recommendedBlendPool: "CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD",
+            usdcToken: process.env.YIELDFLOW_TOKEN_CONTRACT_ID || config.tokenContractId,
+          },
         },
       });
     }
@@ -868,7 +901,7 @@ export async function handleRequest(req, res) {
 
     if (req.method === "POST" && path === "/api/deposit") {
       requireSigner();
-      gateMutation(req);
+      gateMutation(req, { employerMoney: true });
       rateLimit(req, { bucket: "deposit", limit: 15, windowMs: 60_000 });
       const body = await readBody(req);
       const amount = normalizeAmount(body.amount || "10");
@@ -891,7 +924,7 @@ export async function handleRequest(req, res) {
 
     if (req.method === "POST" && path === "/api/stream/create") {
       requireSigner();
-      gateMutation(req);
+      gateMutation(req, { employerMoney: true });
       rateLimit(req, { bucket: "stream", limit: 15, windowMs: 60_000 });
       const body = await readBody(req);
       const employee = body.employeeId || config.employeeAddress;
@@ -1001,7 +1034,7 @@ export async function handleRequest(req, res) {
 
     if (req.method === "POST" && path === "/api/rebalance") {
       requireSigner();
-      gateMutation(req);
+      gateMutation(req, { employerMoney: true });
       rateLimit(req, { bucket: "rebalance", limit: 15, windowMs: 60_000 });
       const body = await readBody(req);
       const amount = normalizeAmount(body.amount || "1");

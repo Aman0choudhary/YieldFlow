@@ -109,3 +109,19 @@ When ready for real deploy (not now):
 > **go mainnet deploy**
 
 Until then, production stays on **testnet**: https://yieldflow-frontend.vercel.app/
+
+---
+
+## Pre-deploy fixes completed (before chain deploy)
+
+- [x] Confirmed mainnet USDC SAC = Circle/Blend shared id
+- [x] Confirmed mainnet Blend FixedV2 pool includes USDC
+- [x] Rotated strong admin + session secrets on Vercel (see local gitignored secrets file)
+- [x] CSP + security headers in `frontend/vercel.json`
+- [x] Mainnet mode requires admin key for deposit/stream/rebalance
+- [x] `scripts/check-mainnet-ready.ps1` readiness checker
+- [x] `scripts/setup-mainnet-identity.ps1` identity helper (no deploy)
+- [ ] Create/fund mainnet deployer identity with XLM
+- [ ] Rotate Groq key in Groq console (was pasted in chat)
+- [ ] Explicit user command: **go mainnet deploy**
+

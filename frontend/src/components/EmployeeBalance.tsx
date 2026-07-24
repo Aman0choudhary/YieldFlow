@@ -47,12 +47,13 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
     Array<{ id: string; date: string; amount: string; dest: string; status: string }>
   >([]);
 
-  const refresh = async (id: string) => {
+  const refresh = async (id: string, opts?: { soft?: boolean }) => {
     const res = await sdk.getEmployeeBalance(id);
     setData(res);
     setBaseValue(res.unlockedAmount);
     setRate(res.ratePerSecond);
-    setLiveValue(res.unlockedAmount);
+    if (!opts?.soft) setLiveValue(res.unlockedAmount);
+    else setLiveValue((prev) => Math.max(res.unlockedAmount, prev));
     setTickStart(Date.now());
     setLastSync(new Date().toLocaleTimeString());
     return res;
@@ -87,10 +88,20 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
     if (!data) return;
     const interval = setInterval(() => {
       const elapsedSeconds = (Date.now() - tickStart) / 1000;
-      setLiveValue(baseValue + elapsedSeconds * rate);
+      const cap = data.streamCap ?? Number.POSITIVE_INFINITY;
+      setLiveValue(Math.min(baseValue + elapsedSeconds * rate, cap));
     }, 250);
     return () => clearInterval(interval);
   }, [data, baseValue, rate, tickStart]);
+
+  useEffect(() => {
+    if (!employeeId || loading) return;
+    const id = employeeId;
+    const poll = setInterval(() => {
+      void refresh(id, { soft: true }).catch(() => undefined);
+    }, 10000);
+    return () => clearInterval(poll);
+  }, [employeeId, loading]);
 
   const handleWithdraw = async () => {
     setWithdrawing(true);
