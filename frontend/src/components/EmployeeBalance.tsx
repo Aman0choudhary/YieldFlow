@@ -3,6 +3,7 @@ import { DEMO_EMPLOYEE_ADDRESS, sdk } from "../sdk/yieldflow-sdk";
 import type { EmployeeBalance as EmployeeBalanceType } from "../sdk/types";
 import { SectionHeader } from "./SectionHeader";
 import { Modal } from "./Modal";
+import { friendlyError, loadLocalWithdrawals, pushLocalWithdrawal } from "../sdk/local-persist";
 
 function AnimatedDigit({ char }: { char: string }) {
   const [current, setCurrent] = useState(char);
@@ -44,15 +45,22 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<
     Array<{ id: string; date: string; amount: string; dest: string; status: string }>
-  >([]);
+  >(() => (typeof window !== "undefined" ? loadLocalWithdrawals() : []));
+  const [lastSync, setLastSync] = useState<string | null>(null);
 
-  const refresh = async (id: string) => {
+  const refresh = async (id: string, opts?: { soft?: boolean }) => {
     const res = await sdk.getEmployeeBalance(id);
     setData(res);
+    // Soft resync keeps the counter continuous if chain value is close to live estimate.
     setBaseValue(res.unlockedAmount);
     setRate(res.ratePerSecond);
-    setLiveValue(res.unlockedAmount);
+    if (!opts?.soft) {
+      setLiveValue(res.unlockedAmount);
+    } else {
+      setLiveValue((prev) => Math.max(res.unlockedAmount, prev));
+    }
     setTickStart(Date.now());
+    setLastSync(new Date().toLocaleTimeString());
     return res;
   };
 
@@ -85,10 +93,22 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
     if (!data) return;
     const interval = setInterval(() => {
       const elapsedSeconds = (Date.now() - tickStart) / 1000;
-      setLiveValue(baseValue + elapsedSeconds * rate);
+      const cap = data.streamCap ?? Number.POSITIVE_INFINITY;
+      const next = baseValue + elapsedSeconds * rate;
+      setLiveValue(Math.min(next, cap));
     }, 250);
     return () => clearInterval(interval);
   }, [data, baseValue, rate, tickStart]);
+
+  // resync every 8s so leaving/returning or tab sleep does not desync from chain
+  useEffect(() => {
+    if (!employeeId || loading) return;
+    const id = employeeId;
+    const poll = setInterval(() => {
+      void refresh(id, { soft: true }).catch(() => undefined);
+    }, 8000);
+    return () => clearInterval(poll);
+  }, [employeeId, loading]);
 
   const handleWithdraw = async () => {
     setWithdrawing(true);
@@ -166,7 +186,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
             ← Back to Home Landing
           </button>
           <span className="label" style={{ color: "var(--grey-300)" }}>
-            Session {short}
+            Session {short}{lastSync ? ` · synced ${lastSync}` : ""}
           </span>
           <button
             className="btn btn-outline"
@@ -186,7 +206,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
           index="01"
           eyebrow="LIVE EARNINGS STREAM"
           thesis="Your wages unlocking second-by-second."
-          paragraph="Live unlocked balance from the Streaming contract on Stellar testnet."
+          paragraph="Live unlocked balance from the Streaming contract on Stellar testnet. Counter resyncs from chain every few seconds so it stays continuous when you leave and return."
         />
 
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
@@ -214,7 +234,8 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
               <span style={{ color: "var(--theme-fg)", fontWeight: 600 }}>
                 ${(rate * 3600).toFixed(4)}/hr
               </span>
-              {data.nextPayday ? ` · Next: ${data.nextPayday}` : ""}
+              {data.nextPayday ? ` · Remaining: ${data.nextPayday}` : ""}
+              {(data.streamCap ?? 0) > 0 ? ` · Cap ${(data.streamCap ?? 0).toFixed(2)}` : ""}
             </p>
 
             <div style={{ marginTop: "var(--spacer-32)" }}>
@@ -331,8 +352,8 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
         <SectionHeader
           index="03"
           eyebrow="SECURITY"
-          thesis="Demo passkey session bound to testnet employee."
-          paragraph="MVP uses a server-mediated demo session for the fixed testnet employee account. Real multi-user Passkey Kit is next."
+          thesis="Allowlisted testnet employee session."
+          paragraph="Session is HMAC-signed for the fixed demo employee on testnet. Real Passkey Kit / multi-user wallets are the next security phase."
         />
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
           <div className="df-cell grid-2-cell slide-up">

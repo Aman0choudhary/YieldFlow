@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { sdk } from "../sdk/yieldflow-sdk";
 import type { ActivityItem, EmployerStats } from "../sdk/types";
 import { SectionHeader } from "./SectionHeader";
+import { friendlyError } from "../sdk/local-persist";
 
 export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => void }) {
   const [stats, setStats] = useState<EmployerStats | null>(null);
@@ -25,12 +26,16 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
       setStats(nextStats);
       setActivity(nextActivity);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load vault data");
+      setError(friendlyError(e));
     }
   };
 
   useEffect(() => {
     void load();
+    const poll = setInterval(() => {
+      void load();
+    }, 12000);
+    return () => clearInterval(poll);
   }, []);
 
   const fundVault = async () => {
@@ -42,11 +47,11 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
       setStatus(
         tx.status === "failed"
           ? `Deposit failed (${tx.txId})`
-          : `Deposit submitted: ${tx.txId.slice(0, 16)}…`
+          : `Deposit confirmed Â· 15% buffer / 85% Blend Â· ${tx.txId.slice(0, 12)}â€¦`
       );
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Deposit failed");
+      setError(friendlyError(e));
     } finally {
       setFunding(false);
     }
@@ -91,15 +96,16 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
       ? (stats.bufferStatus.earningYield / stats.totalPool) * 100
       : stats.yieldRoutePercent ?? 85;
 
-  // Chart data points
+  // Chart shape is illustrative; Sunday uses live projected APY from Blend.
+  const liveApy = parseFloat(stats.projectedApy || "0") || 0;
   const chartData = [
-    { day: "Mon", apy: 5.2, yieldVal: "$1.40" },
-    { day: "Tue", apy: 5.4, yieldVal: "$1.85" },
-    { day: "Wed", apy: 5.8, yieldVal: "$2.30" },
-    { day: "Thu", apy: 5.6, yieldVal: "$2.75" },
-    { day: "Fri", apy: 6.1, yieldVal: "$3.40" },
-    { day: "Sat", apy: 6.3, yieldVal: "$3.95" },
-    { day: "Sun", apy: parseFloat(stats.projectedApy || "6.5"), yieldVal: yieldEarned },
+    { day: "Mon", apy: +(liveApy * 0.9).toFixed(2), yieldVal: money(stats.yieldEarned * 0.2, 4) },
+    { day: "Tue", apy: +(liveApy * 0.93).toFixed(2), yieldVal: money(stats.yieldEarned * 0.35, 4) },
+    { day: "Wed", apy: +(liveApy * 0.97).toFixed(2), yieldVal: money(stats.yieldEarned * 0.5, 4) },
+    { day: "Thu", apy: +(liveApy * 0.95).toFixed(2), yieldVal: money(stats.yieldEarned * 0.65, 4) },
+    { day: "Fri", apy: +(liveApy * 1.02).toFixed(2), yieldVal: money(stats.yieldEarned * 0.8, 4) },
+    { day: "Sat", apy: +(liveApy * 1.05).toFixed(2), yieldVal: money(stats.yieldEarned * 0.92, 4) },
+    { day: "Sun", apy: liveApy, yieldVal: yieldEarned },
   ];
 
   return (
@@ -116,13 +122,15 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
         }}
       >
         <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("login")}>
-          ← Back to Home Landing
+          â† Back to Home Landing
         </button>
         <div className="label" style={{ color: "var(--grey-300)" }}>
-          Employer {employerAddress ? `${employerAddress.slice(0, 6)}…${employerAddress.slice(-4)}` : "—"}
+          Employer {employerAddress ? `${employerAddress.slice(0, 6)}â€¦${employerAddress.slice(-4)}` : "â€”"}
+          {" Â· "}
+          <span style={{ color: "var(--theme-accent)" }}>Blend-backed testnet vault</span>
         </div>
         <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("approvals")}>
-          Manage Stream Approvals →
+          Manage Stream Approvals â†’
         </button>
       </div>
 
@@ -218,7 +226,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
                 <button key={n} type="button" className="btn btn-outline" style={{ fontSize: "12px", borderColor: fundAmount === n ? "var(--theme-accent)" : undefined, color: fundAmount === n ? "var(--theme-accent)" : undefined }} onClick={() => setFundAmount(n)} disabled={funding}>{`${n}`}</button>
               ))}
               <button className="btn" onClick={() => void fundVault()} disabled={funding}>
-                {funding ? "Funding…" : `Fund Vault (${fundAmount})`}
+                {funding ? "Funding…" : `Fund Vault ($${fundAmount})`}
               </button>
               <button className="btn btn-outline" onClick={() => onNavigate("approvals")}>
                 Manage Streams
@@ -237,6 +245,9 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
                 {error}
               </p>
             )}
+            <p className="label" style={{ marginTop: "var(--spacer-12)", color: "var(--grey-300)" }}>
+              Need USDC? Circle testnet faucet â†’ employer GD2Xâ€¦ (see docs/TESTNET_MVP_STATUS.md)
+            </p>
           </div>
         </div>
       </section>
@@ -247,7 +258,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
           index="02"
           eyebrow="YIELD PERFORMANCE"
           thesis="Real-time APY yield accumulation curve."
-          paragraph="DeFindex and Blend pool performance tracked over a 7-day rolling window."
+          paragraph="Headline APY is estimated from the live Blend reserve curve. Chart shape is illustrative; numbers on the cards are live from chain."
         />
 
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
@@ -261,7 +272,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
                 <div style={{ textAlign: "right", border: "1px solid var(--theme-accent)", padding: "8px 16px", backgroundColor: "rgba(45, 212, 168, 0.05)" }}>
                   <span className="label" style={{ color: "var(--theme-accent)" }}>{activeChartPoint.day} Performance</span>
                   <div style={{ fontFamily: "NON Natural Mono", fontSize: "14px" }}>
-                    {activeChartPoint.apy}% APY · {activeChartPoint.yieldVal}
+                    {activeChartPoint.apy}% APY Â· {activeChartPoint.yieldVal}
                   </div>
                 </div>
               )}
@@ -343,7 +354,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
           index="03"
           eyebrow="LEDGER"
           thesis="Live activity from the YieldFlow API."
-          paragraph="Events returned by the production bridge (smoke + recent demo actions)."
+          paragraph="Recent actions from this browser and the live API. History persists across refresh in this browser."
         />
 
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
@@ -386,7 +397,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
           index="04"
           eyebrow="STREAM METRICS"
           thesis="Demo stream coverage."
-          paragraph="MVP uses a single live testnet employee stream for end-to-end verification."
+          paragraph="Single live testnet employee stream. Yield leg is supplied to Blend; buffer stays liquid for instant unlocks."
         />
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
           <div className="df-cell grid-3-cell slide-up" style={{ animationDelay: "0.2s" }}>

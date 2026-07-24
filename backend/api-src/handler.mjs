@@ -106,6 +106,17 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function humanizeChainError(error) {
+  const msg = error?.message || String(error || "");
+  if (/not within the allowed range|insufficient/i.test(msg)) {
+    return Object.assign(new Error("Insufficient testnet USDC on employer/signer account. Top up via Circle faucet."), { statusCode: 400 });
+  }
+  if (/YIELDFLOW_SIGNER_SECRET/i.test(msg)) {
+    return Object.assign(new Error(msg), { statusCode: 503 });
+  }
+  return error;
+}
+
 function requireSigner() {
   if (!signerKeypair) {
     throw Object.assign(new Error("YIELDFLOW_SIGNER_SECRET is required for state-changing actions."), {
@@ -603,9 +614,10 @@ export async function handleRequest(req, res) {
     res.end(JSON.stringify({ error: "Not found", path }));
   } catch (error) {
     console.error("Request error:", error);
-    const status = error.statusCode || 500;
+    const normalized = humanizeChainError(error);
+    const status = normalized.statusCode || 500;
     res.writeHead(status, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: error.message || String(error) }));
+    res.end(JSON.stringify({ error: normalized.message || String(normalized) }));
   }
 }
 

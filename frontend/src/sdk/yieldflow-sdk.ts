@@ -12,6 +12,7 @@ import type {
   TxStatus,
   YieldFlowSDK,
 } from "./types";
+import { loadLocalActivity, mergeActivity, pushLocalActivity } from "./local-persist";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -85,7 +86,17 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       method: "POST",
       body: JSON.stringify({ amount: String(safeAmount) }),
     });
-    return mapTxStatus(result.status, result.txHash);
+    const mapped = mapTxStatus(result.status, result.txHash);
+    if (mapped.status === "success") {
+      pushLocalActivity({
+        id: result.txHash,
+        kind: "deposit",
+        label: "Payroll deposited (buffer + Blend)",
+        timestamp: new Date().toISOString(),
+        amount: `+${safeAmount} USDC`,
+      });
+    }
+    return mapped;
   }
 
   async getEmployerStats(): Promise<EmployerStats> {
@@ -194,18 +205,31 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       body: JSON.stringify({ employeeId }),
     });
 
+    const mapped = mapTxStatus(result.status, result.txHash);
+    const amountReceived = toNumber(result.amountReceived);
+    if (mapped.status === "success") {
+      pushLocalActivity({
+        id: result.txHash,
+        kind: "withdraw",
+        label: "Employee withdrawal",
+        timestamp: new Date().toISOString(),
+        amount: `-${amountReceived} USDC`,
+      });
+    }
     return {
-      ...mapTxStatus(result.status, result.txHash),
-      amountReceived: toNumber(result.amountReceived),
+      ...mapped,
+      amountReceived,
     };
   }
 
   async getActivity(): Promise<ActivityItem[]> {
+    let remote: ActivityItem[] = [];
     try {
-      return await apiFetch<ActivityItem[]>("/api/activity");
+      remote = await apiFetch<ActivityItem[]>("/api/activity");
     } catch {
-      return [];
+      remote = [];
     }
+    return mergeActivity(remote as any, loadLocalActivity()) as ActivityItem[];
   }
 
   async getApprovalStatus(id: string): Promise<ApprovalStatus> {
