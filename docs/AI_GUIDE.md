@@ -1,20 +1,19 @@
-# AI Guide (Gemini)
+# AI Guide (Groq)
 
-## Setup (server only)
-Vercel env (never `VITE_*`):
-- `YIELDFLOW_AI_API_KEY` — Google AI Studio key
-- `YIELDFLOW_AI_PROVIDER=gemini`
-- `YIELDFLOW_AI_MODEL=gemini-2.0-flash` (or `gemini-1.5-flash`)
+## Server env only (never VITE_*)
+- `YIELDFLOW_AI_API_KEY` — Groq key (`gsk_...`)
+- `YIELDFLOW_AI_PROVIDER=groq`
+- `YIELDFLOW_AI_BASE_URL=https://api.groq.com/openai/v1`
+- `YIELDFLOW_AI_MODEL=llama-3.3-70b-versatile`
 
 ## Security
 - Key only on server
 - Guide refuses secret/key extraction prompts
-- Provider errors are redacted
-- Rate limited
-- CSRF / same-site required for browser calls
+- Provider errors redacted
+- Rate limited + CSRF/same-site for browser
 
 ## Endpoint
-`POST /api/guide` with `{ "message": "...", "history": [...] }`
+`POST /api/guide` `{ "message": "...", "history": [...] }`
 
 ## Fallback
-If Gemini quota/key/network fails, built-in product answers still work.
+If Groq is down, built-in product answers still work.
