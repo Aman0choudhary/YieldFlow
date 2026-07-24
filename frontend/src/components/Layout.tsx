@@ -81,14 +81,38 @@ export function Layout({
 
       {/* FIXED PINNED TOP HEADER */}
       <header className="site-header">
-        {/* Left: Logo + Back button when not on login */}
+        {/* Left: Perfectly aligned logo icon + YieldFlow title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div 
             className="logo text-gradient" 
-            style={{ cursor: 'pointer' }}
+            style={{ 
+              cursor: 'pointer', 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '12px' 
+            }}
             onClick={() => onNavigate('login')}
           >
-            YieldFlow
+            <img 
+              src="/logo.svg" 
+              alt="YieldFlow Logo" 
+              style={{ 
+                height: '32px', 
+                width: '32px', 
+                display: 'block', 
+                objectFit: 'contain',
+                flexShrink: 0 
+              }} 
+            />
+            <span style={{ 
+              fontSize: '24px', 
+              fontWeight: 700, 
+              letterSpacing: '-0.03em', 
+              lineHeight: 1,
+              display: 'inline-block'
+            }}>
+              YieldFlow
+            </span>
           </div>
           {currentView !== 'login' && (
             <button 
