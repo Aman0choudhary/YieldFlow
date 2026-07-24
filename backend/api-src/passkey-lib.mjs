@@ -91,7 +91,7 @@ export async function makeRegistrationOptions({ employeeId, rpID, rpName }) {
     attestationType: "none",
     authenticatorSelection: {
       residentKey: "preferred",
-      userVerification: "preferred",
+      userVerification: "required",
       authenticatorAttachment: "platform",
     },
     supportedAlgorithmIDs: [-7, -257],
@@ -102,7 +102,7 @@ export async function makeAuthenticationOptions({ rpID, credentialId }) {
   return generateAuthenticationOptions({
     rpID,
     timeout: 60_000,
-    userVerification: "preferred",
+    userVerification: "required",
     allowCredentials: credentialId
       ? [
           {
@@ -119,7 +119,7 @@ export async function verifyRegistration({ response, expectedChallenge, expected
     expectedChallenge,
     expectedOrigin,
     expectedRPID,
-    requireUserVerification: false,
+    requireUserVerification: true,
   });
 }
 
@@ -141,7 +141,7 @@ export async function verifyAuthentication({
       counter: Number(credential.counter || 0),
       transports: credential.transports,
     },
-    requireUserVerification: false,
+    requireUserVerification: true,
   });
 }
 

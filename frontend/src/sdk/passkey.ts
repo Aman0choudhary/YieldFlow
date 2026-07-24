@@ -46,6 +46,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body ?? {}),
+    credentials: "include",
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -17,6 +17,15 @@ import {
   seal,
   unseal,
 } from "./passkey-lib.mjs";
+import {
+  applyCors,
+  issueCsrfCookie,
+  assertMutationAuthorized,
+  assertEmployeeSession,
+  rateLimit,
+  resolveRequestOrigin,
+  isOriginAllowed,
+} from "./security-lib.mjs";
 import { createServer } from "node:http";
 
 let stellarSdk;
@@ -41,7 +50,7 @@ const config = {
   port: Number(process.env.PORT || process.env.YIELDFLOW_API_PORT || 8787),
   rpcUrl: process.env.YIELDFLOW_RPC_URL || "https://soroban-testnet.stellar.org",
   networkPassphrase: process.env.YIELDFLOW_NETWORK_PASSPHRASE || "Test SDF Network ; September 2015",
-  allowedOrigin: process.env.YIELDFLOW_ALLOWED_ORIGIN || "*",
+  allowedOrigin: process.env.YIELDFLOW_ALLOWED_ORIGIN || "",
   signerSecret: process.env.YIELDFLOW_SIGNER_SECRET || "",
   publicKey: process.env.YIELDFLOW_PUBLIC_KEY || "GD2XEYNTQ4BWVK6ORZPHU625ZKRT2ICPDVSEXCDLPWCHHJXBPPMD6IJM",
   vaultContractId:
@@ -60,10 +69,9 @@ const config = {
     process.env.YIELDFLOW_DEFINDEX_FACTORY_ID || "CDSCWE4GLNBYYTES2OCYDFQA2LLY4RBIAX6ZI32VSUXD7GO6HRPO4A32",
   employeeAddress:
     process.env.YIELDFLOW_EMPLOYEE_ADDRESS || "GBPDU4S2VIXMNW4VUZKNFHQ7CHAU2RZA7DGPY4K77CZFGK6LMESZWSL4",
-  sessionSecret:
-    process.env.YIELDFLOW_SESSION_SECRET ||
-    process.env.YIELDFLOW_SIGNER_SECRET ||
-    "yieldflow-testnet-session-dev-only",
+  sessionSecret: process.env.YIELDFLOW_SESSION_SECRET || "",
+  adminApiKey: process.env.YIELDFLOW_ADMIN_API_KEY || "",
+  requireStrictSecrets: String(process.env.YIELDFLOW_STRICT_SECRETS || "true").toLowerCase() !== "false",
   networkLabel: process.env.YIELDFLOW_NETWORK_LABEL || "stellar-testnet",
 };
 
@@ -107,10 +115,38 @@ function formatNextPayday(endTime) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-function setCors(res) {
-  res.setHeader("access-control-allow-origin", config.allowedOrigin);
-  res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type,authorization");
+function setCors(req, res) {
+  return applyCors(res, req, config.allowedOrigin);
+}
+
+function assertConfigSecurity() {
+  if (!config.allowedOrigin || config.allowedOrigin === "*") {
+    throw Object.assign(
+      new Error("YIELDFLOW_ALLOWED_ORIGIN must be set to your exact app origin (not *)."),
+      { statusCode: 500 }
+    );
+  }
+  if (!config.sessionSecret || config.sessionSecret.length < 24) {
+    throw Object.assign(
+      new Error("YIELDFLOW_SESSION_SECRET must be set to a dedicated secret (min 24 chars), not empty and not the signer key."),
+      { statusCode: 500 }
+    );
+  }
+  if (config.signerSecret && config.sessionSecret === config.signerSecret) {
+    throw Object.assign(
+      new Error("YIELDFLOW_SESSION_SECRET must differ from YIELDFLOW_SIGNER_SECRET."),
+      { statusCode: 500 }
+    );
+  }
+}
+
+function gateMutation(req) {
+  rateLimit(req, { bucket: "mutate", limit: 40, windowMs: 60_000 });
+  return assertMutationAuthorized(req, {
+    allowedOrigin: config.allowedOrigin,
+    sessionSecret: config.sessionSecret,
+    adminKey: config.adminApiKey,
+  });
 }
 
 function sendJson(res, body, statusCode = 200) {
@@ -450,11 +486,32 @@ function resolveApiPath(req, url) {
 
 export async function handleRequest(req, res) {
   try {
-    setCors(res);
+    const corsOk = setCors(req, res);
     if (req.method === "OPTIONS") {
+      // Only allow preflight from allowed origin
+      if (!corsOk && resolveRequestOrigin(req)) {
+        res.writeHead(403, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "Origin not allowed" }));
+        return;
+      }
       res.writeHead(204);
       res.end();
       return;
+    }
+
+    try {
+      assertConfigSecurity();
+    } catch (e) {
+      // Health can still report misconfig; other routes fail closed
+      if (!(req.method === "GET" && (resolveApiPath(req, new URL(req.url || "/", `http://${req.headers.host || "localhost"}`)) === "/api/health"))) {
+        return sendJson(res, { error: e.message }, e.statusCode || 500);
+      }
+    }
+
+    // Issue/refresh CSRF cookie for same-site browser traffic (GET or POST pre-auth)
+    if (corsOk && config.sessionSecret) {
+      const secure = !String(req.headers?.host || "").includes("localhost");
+      issueCsrfCookie(res, config.sessionSecret, { secure });
     }
 
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
@@ -470,6 +527,13 @@ export async function handleRequest(req, res) {
         signerConfigured: Boolean(config.signerSecret && !String(config.signerSecret).startsWith("SBXXX")),
         passkeyAuth: true,
         defindexVaultId: config.defindexVaultId,
+        security: {
+          corsLocked: Boolean(config.allowedOrigin && config.allowedOrigin !== "*"),
+          sessionSecretConfigured: Boolean(config.sessionSecret && config.sessionSecret.length >= 24 && config.sessionSecret !== config.signerSecret),
+          adminKeyConfigured: Boolean(config.adminApiKey),
+          csrf: true,
+          withdrawRequiresSession: true,
+        },
       });
     }
 
@@ -517,6 +581,7 @@ export async function handleRequest(req, res) {
 
     /* ── Passkey: registration options ── */
     if (req.method === "POST" && path === "/api/employee/passkey/register/options") {
+      rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
       const body = await readBody(req);
       const employeeId = body.employeeId || config.employeeAddress;
       if (!isAllowedEmployee(employeeId)) {
@@ -539,6 +604,8 @@ export async function handleRequest(req, res) {
 
     /* ── Passkey: registration verify ── */
     if (req.method === "POST" && path === "/api/employee/passkey/register/verify") {
+      rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
+      gateMutation(req);
       const body = await readBody(req);
       const pk = getPasskeyConfig(req, process.env);
       const challenge = readChallengeToken(body.challengeToken, pk.sessionSecret, "reg");
@@ -580,6 +647,7 @@ export async function handleRequest(req, res) {
 
     /* ── Passkey: login options ── */
     if (req.method === "POST" && path === "/api/employee/passkey/login/options") {
+      rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
       const body = await readBody(req);
       const pk = getPasskeyConfig(req, process.env);
       let employeeId = body.employeeId || config.employeeAddress;
@@ -604,6 +672,8 @@ export async function handleRequest(req, res) {
 
     /* ── Passkey: login verify ── */
     if (req.method === "POST" && path === "/api/employee/passkey/login/verify") {
+      rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
+      gateMutation(req);
       const body = await readBody(req);
       const pk = getPasskeyConfig(req, process.env);
       const challenge = readChallengeToken(body.challengeToken, pk.sessionSecret, "auth");
@@ -678,6 +748,8 @@ export async function handleRequest(req, res) {
 
     if (req.method === "POST" && path === "/api/deposit") {
       requireSigner();
+      gateMutation(req);
+      rateLimit(req, { bucket: "deposit", limit: 15, windowMs: 60_000 });
       const body = await readBody(req);
       const amount = normalizeAmount(body.amount || "10");
       const amountUnits = toBaseUnits(amount);
@@ -699,6 +771,8 @@ export async function handleRequest(req, res) {
 
     if (req.method === "POST" && path === "/api/stream/create") {
       requireSigner();
+      gateMutation(req);
+      rateLimit(req, { bucket: "stream", limit: 15, windowMs: 60_000 });
       const body = await readBody(req);
       const employee = body.employeeId || config.employeeAddress;
       if (!isAllowedEmployee(employee)) {
@@ -750,15 +824,21 @@ export async function handleRequest(req, res) {
 
     if (req.method === "POST" && path === "/api/withdraw") {
       requireSigner();
+      rateLimit(req, { bucket: "withdraw", limit: 20, windowMs: 60_000 });
       const body = await readBody(req);
       const employee = body.employeeId || config.employeeAddress;
-      const session = verifySession(getBearer(req), employee);
-      // Allow withdraw if session matches OR (testnet) if no session header but employee is allowlisted and body flag demo — still require allowlist.
-      if (!session && !isAllowedEmployee(employee)) {
-        return sendJson(res, { error: "Unauthorized employee withdraw." }, 401);
+      if (!isAllowedEmployee(employee)) {
+        return sendJson(res, { error: "Employee not on allowlist." }, 403);
       }
-      if (getBearer(req) && !session) {
-        return sendJson(res, { error: "Invalid or expired session." }, 401);
+      // HIGH FIX: always require passkey-issued employee session (no allowlist-only bypass)
+      assertEmployeeSession(req, verifySession, employee);
+      // Browser CSRF still required when not using admin key
+      try {
+        gateMutation(req);
+      } catch (e) {
+        // Allow withdraw with valid employee session even if CSRF missing only when admin key used;
+        // gateMutation already allows admin. If CSRF fail, rethrow.
+        throw e;
       }
 
       const balance = await streaming.simulate("balance", [toAddr(employee)]);
@@ -801,6 +881,8 @@ export async function handleRequest(req, res) {
 
     if (req.method === "POST" && path === "/api/rebalance") {
       requireSigner();
+      gateMutation(req);
+      rateLimit(req, { bucket: "rebalance", limit: 15, windowMs: 60_000 });
       const body = await readBody(req);
       const amount = normalizeAmount(body.amount || "1");
       const { hash, result, status } = await vault.execute("rebalance_to_buffer", [
@@ -843,3 +925,5 @@ const isMain =
 if (isMain && !process.env.VERCEL) {
   // local bootstrap for backend/src/server.js path
 }
+
+
