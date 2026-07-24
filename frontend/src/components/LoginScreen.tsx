@@ -77,7 +77,7 @@ export function LoginScreen({ onNavigate }: { onNavigate: (view: any) => void })
               {busy === "employer" ? "Connecting…" : "Launch Employer Vault"}
             </button>
             <button className="btn btn-outline" onClick={enterEmployee} disabled={!!busy}>
-              {busy === "employee" ? "Authenticating…" : "Employee Passkey Portal"}
+              {busy === "employee" ? "Waiting for passkey…" : "Employee Passkey Portal"}
             </button>
           </div>
           {error && (
@@ -136,7 +136,7 @@ export function LoginScreen({ onNavigate }: { onNavigate: (view: any) => void })
               onClick={enterEmployee}
               disabled={!!busy}
             >
-              Unlock with Passkey
+              Unlock with device passkey
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-export type TxStatus = {
+﻿export type TxStatus = {
   txId: string;
   status: "success" | "pending" | "failed";
 };
@@ -58,6 +58,7 @@ export interface YieldFlowSDK {
   loginEmployee(): Promise<{ employeeId: string; name?: string; walletAddress?: string }>;
   restoreEmployeeSession(): Promise<{ employeeId: string | null }>;
   logoutEmployee(): void;
+  resetPasskey(): void;
   getEmployeeBalance(id: string): Promise<EmployeeBalance>;
   withdraw(id: string): Promise<TxStatus & { amountReceived: number }>;
   getActivity(): Promise<ActivityItem[]>;

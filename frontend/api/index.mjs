@@ -4,6 +4,19 @@
  */
 
 import { createHash, createHmac, timingSafeEqual, randomBytes } from "node:crypto";
+import {
+  getPasskeyConfig,
+  issueChallengeToken,
+  readChallengeToken,
+  makeRegistrationOptions,
+  makeAuthenticationOptions,
+  verifyRegistration,
+  verifyAuthentication,
+  packCredentialRecord,
+  bumpCounter,
+  seal,
+  unseal,
+} from "./passkey-lib.mjs";
 import { createServer } from "node:http";
 
 let stellarSdk;
@@ -394,6 +407,7 @@ export async function handleRequest(req, res) {
         streamingContractId: config.streamingContractId,
         blendPoolId: config.blendPoolId,
         signerConfigured: Boolean(config.signerSecret && !String(config.signerSecret).startsWith("SBXXX")),
+        passkeyAuth: true,
       });
     }
 
@@ -434,27 +448,156 @@ export async function handleRequest(req, res) {
       return sendJson(res, { employeeId });
     }
 
+
+    /* ── Passkey: registration options ── */
+    if (req.method === "POST" && path === "/api/employee/passkey/register/options") {
+      const body = await readBody(req);
+      const employeeId = body.employeeId || config.employeeAddress;
+      if (!isAllowedEmployee(employeeId)) {
+        return sendJson(res, { error: "Employee not authorized for this deployment." }, 403);
+      }
+      const pk = getPasskeyConfig(req, process.env);
+      const options = await makeRegistrationOptions({
+        employeeId,
+        rpID: pk.rpID,
+        rpName: pk.rpName,
+      });
+      const challengeToken = issueChallengeToken({
+        type: "reg",
+        employeeId,
+        challenge: options.challenge,
+        secret: pk.sessionSecret,
+      });
+      return sendJson(res, { options, challengeToken, employeeId, rpID: pk.rpID, origin: pk.origin });
+    }
+
+    /* ── Passkey: registration verify ── */
+    if (req.method === "POST" && path === "/api/employee/passkey/register/verify") {
+      const body = await readBody(req);
+      const pk = getPasskeyConfig(req, process.env);
+      const challenge = readChallengeToken(body.challengeToken, pk.sessionSecret, "reg");
+      const employeeId = challenge.employeeId;
+      if (!isAllowedEmployee(employeeId)) {
+        return sendJson(res, { error: "Employee not authorized." }, 403);
+      }
+      const verification = await verifyRegistration({
+        response: body.attestation,
+        expectedChallenge: challenge.challenge,
+        expectedOrigin: pk.origin,
+        expectedRPID: pk.rpID,
+      });
+      if (!verification.verified || !verification.registrationInfo) {
+        return sendJson(res, { error: "Passkey registration failed verification." }, 401);
+      }
+      const record = packCredentialRecord({
+        employeeId,
+        registrationInfo: verification.registrationInfo,
+        response: body.attestation,
+      });
+      const credentialSeal = seal(record, pk.sessionSecret);
+      const sessionToken = issueSession(employeeId);
+      pushActivity({
+        kind: "auth",
+        label: "Passkey registered",
+        amount: employeeId.slice(0, 6) + "…",
+      });
+      return sendJson(res, {
+        employeeId,
+        name: "Testnet Employee",
+        walletAddress: employeeId,
+        sessionToken,
+        credentialSeal,
+        authMethod: "passkey",
+        registered: true,
+      });
+    }
+
+    /* ── Passkey: login options ── */
+    if (req.method === "POST" && path === "/api/employee/passkey/login/options") {
+      const body = await readBody(req);
+      const pk = getPasskeyConfig(req, process.env);
+      let employeeId = body.employeeId || config.employeeAddress;
+      let credentialId;
+      if (body.credentialSeal) {
+        const record = unseal(body.credentialSeal, pk.sessionSecret);
+        employeeId = record.employeeId || employeeId;
+        credentialId = record.credentialID;
+      }
+      if (!isAllowedEmployee(employeeId)) {
+        return sendJson(res, { error: "Employee not authorized for this deployment." }, 403);
+      }
+      const options = await makeAuthenticationOptions({ rpID: pk.rpID, credentialId });
+      const challengeToken = issueChallengeToken({
+        type: "auth",
+        employeeId,
+        challenge: options.challenge,
+        secret: pk.sessionSecret,
+      });
+      return sendJson(res, { options, challengeToken, employeeId, rpID: pk.rpID, origin: pk.origin });
+    }
+
+    /* ── Passkey: login verify ── */
+    if (req.method === "POST" && path === "/api/employee/passkey/login/verify") {
+      const body = await readBody(req);
+      const pk = getPasskeyConfig(req, process.env);
+      const challenge = readChallengeToken(body.challengeToken, pk.sessionSecret, "auth");
+      if (!body.credentialSeal) {
+        return sendJson(res, { error: "Missing passkey credential. Register a passkey first." }, 400);
+      }
+      const record = unseal(body.credentialSeal, pk.sessionSecret);
+      if (record.employeeId !== challenge.employeeId) {
+        return sendJson(res, { error: "Passkey does not match employee session." }, 401);
+      }
+      if (!isAllowedEmployee(record.employeeId)) {
+        return sendJson(res, { error: "Employee not authorized." }, 403);
+      }
+      const verification = await verifyAuthentication({
+        response: body.assertion,
+        expectedChallenge: challenge.challenge,
+        expectedOrigin: pk.origin,
+        expectedRPID: pk.rpID,
+        credential: record,
+      });
+      if (!verification.verified) {
+        return sendJson(res, { error: "Passkey authentication failed." }, 401);
+      }
+      const updated = bumpCounter(record, verification.authenticationInfo?.newCounter);
+      const credentialSeal = seal(updated, pk.sessionSecret);
+      const sessionToken = issueSession(record.employeeId);
+      pushActivity({
+        kind: "auth",
+        label: "Passkey login",
+        amount: record.employeeId.slice(0, 6) + "…",
+      });
+      return sendJson(res, {
+        employeeId: record.employeeId,
+        name: "Testnet Employee",
+        walletAddress: record.employeeId,
+        sessionToken,
+        credentialSeal,
+        authMethod: "passkey",
+      });
+    }
+
+    /* ── Legacy login: requires existing passkey seal (no open auto-login) ── */
     if (req.method === "POST" && path === "/api/employee/login") {
       const body = await readBody(req);
       const employeeId = body.employeeId || config.employeeAddress;
       if (!isAllowedEmployee(employeeId)) {
         return sendJson(res, { error: "Employee not authorized for this deployment." }, 403);
       }
-      // Testnet MVP: allowlisted employee session (real Passkey Kit can replace this later).
-      const sessionToken = issueSession(employeeId);
-      pushActivity({
-        kind: "auth",
-        label: "Employee session issued",
-        amount: employeeId.slice(0, 6) + "…",
-      });
-      return sendJson(res, {
-        employeeId,
-        name: body.name || "Testnet Employee",
-        walletAddress: employeeId,
-        sessionToken,
-        authMethod: "allowlist-session",
-      });
+      // Force clients onto WebAuthn path.
+      return sendJson(
+        res,
+        {
+          error: "Passkey required. Use /api/employee/passkey/* endpoints.",
+          authMethod: "passkey-required",
+          employeeId,
+        },
+        401
+      );
     }
+
 
     if (req.method === "GET" && path === "/api/employee/balance") {
       const employee = url.searchParams.get("employeeId") || config.employeeAddress;

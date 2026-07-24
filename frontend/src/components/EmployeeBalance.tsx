@@ -143,7 +143,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
   if (loading) {
     return (
       <div className="df-cell hero-content" style={{ minHeight: "60vh", justifyContent: "center" }}>
-        <h2 className="text-gradient">Authenticating Passkey...</h2>
+        <h2 className="text-gradient">Waiting for passkey…</h2>
       </div>
     );
   }
@@ -197,6 +197,18 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
             }}
           >
             Sign out
+          </button>
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: "12px" }}
+            onClick={() => {
+              if (confirm("Remove this device passkey? You will register a new one next login.")) {
+                sdk.resetPasskey?.();
+                onNavigate?.("login");
+              }
+            }}
+          >
+            Reset passkey
           </button>
         </div>
       )}
@@ -352,8 +364,8 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
         <SectionHeader
           index="03"
           eyebrow="SECURITY"
-          thesis="Allowlisted testnet employee session."
-          paragraph="Session is HMAC-signed for the fixed demo employee on testnet. Real Passkey Kit / multi-user wallets are the next security phase."
+          thesis="Device passkey protects this employee session."
+          paragraph="Login uses real browser WebAuthn (Face ID / Touch ID / Windows Hello). The passkey is bound to this device and the allowlisted testnet employee address."
         />
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
           <div className="df-cell grid-2-cell slide-up">

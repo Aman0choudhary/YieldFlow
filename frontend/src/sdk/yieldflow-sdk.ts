@@ -13,6 +13,7 @@ import type {
   YieldFlowSDK,
 } from "./types";
 import { loadLocalActivity, mergeActivity, pushLocalActivity } from "./local-persist";
+import { loginWithPasskey, clearCredentialSeal } from "./passkey";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -131,21 +132,20 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
   }
 
   async loginEmployee(): Promise<{ employeeId: string; name?: string; walletAddress?: string }> {
-    const session = await apiFetch<{
-      employeeId: string;
-      name?: string;
-      walletAddress?: string;
-      sessionToken?: string;
-    }>("/api/employee/login", {
-      method: "POST",
-      body: JSON.stringify({ employeeId: DEMO_EMPLOYEE_ADDRESS }),
-    });
-
+    // Real browser WebAuthn passkey (register on first visit, auth after that).
+    const session = await loginWithPasskey(DEMO_EMPLOYEE_ADDRESS);
     const employeeId = session.employeeId || DEMO_EMPLOYEE_ADDRESS;
     localStorage.setItem(SESSION_KEY, employeeId);
     if (session.sessionToken) {
       localStorage.setItem(SESSION_TOKEN_KEY, session.sessionToken);
     }
+    pushLocalActivity({
+      id: `auth_${Date.now()}`,
+      kind: "auth",
+      label: session.registered ? "Passkey registered" : "Passkey login",
+      timestamp: new Date().toISOString(),
+      amount: employeeId.slice(0, 6) + "…",
+    });
     return {
       employeeId,
       name: session.name || "Demo Employee",
@@ -173,6 +173,14 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
   logoutEmployee(): void {
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(SESSION_TOKEN_KEY);
+    // Keep enrolled passkey seal so next login uses device biometrics, not re-register.
+  }
+
+  /** Full device unlink — user must register passkey again. */
+  resetPasskey(): void {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+    clearCredentialSeal();
   }
 
   async getEmployeeBalance(id: string): Promise<EmployeeBalance> {
