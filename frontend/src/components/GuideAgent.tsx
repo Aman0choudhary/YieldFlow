@@ -10,46 +10,66 @@ const STARTERS = [
   "Is this mainnet?",
 ];
 
-function answer(question: string): string {
+function localAnswer(question: string): string {
   const q = question.toLowerCase();
+  if (/(api[_-]?key|secret|private key|admin key|signer|mnemonic|seed)/i.test(q) && /(show|reveal|give|what is|tell|dump|leak)/i.test(q)) {
+    return "I can’t share secrets, API keys, admin keys, or private keys. I only explain how YieldFlow works for users.";
+  }
+  if (q.includes("mainnet") || q.includes("real money")) {
+    return "The public app is on Stellar testnet unless operators switch networks. Test USDC is not real cash.";
+  }
+  if (q.includes("passkey") || q.includes("login")) {
+    return "Employees use a real device passkey (Face ID / Touch ID / Windows Hello). Withdrawals need that session.";
+  }
+  if (q.includes("withdraw")) {
+    return "Salary unlocks over time on-chain. Employees passkey-login and withdraw only the unlocked amount from the vault buffer.";
+  }
+  if (q.includes("buffer") || q.includes("blend") || q.includes("yield") || q.includes("defindex")) {
+    return "Employer deposits USDC: ~15% stays liquid (buffer), ~85% goes to Blend for yield. DeFindex is the strategy-layer reference (DeFindex → Blend architecture).";
+  }
+  if (q.includes("employer") || q.includes("fund") || q.includes("deposit")) {
+    return "Employers use the Treasury Vault to fund payroll and watch buffer/yield. Approvals authorize employee streams.";
+  }
+  if (q.includes("admin")) {
+    return "Admin console is for operators only (menu 06). Normal users use Employer/Employee portals. Admin key is never shown by this guide.";
+  }
+  if (q.includes("how") || q.includes("work") || q.includes("payroll") || q.includes("what is")) {
+    return "YieldFlow streams payroll on Stellar: employer deposits once → buffer + Blend yield → employee balance unlocks every second → passkey withdraw of unlocked USDC.";
+  }
+  return "Ask about payroll flow, buffer vs yield, passkeys, withdraws, employer vs employee roles, or testnet vs mainnet.";
+}
 
-  if (q.includes("mainnet") || q.includes("real money") || q.includes("production network")) {
-    return "Right now the live app is on Stellar **testnet**. Mainnet prep is documented, but mainnet is not switched on until you explicitly deploy. Test USDC is not real cash.";
+async function askServer(message: string, history: Msg[]): Promise<{ reply: string; source?: string }> {
+  const res = await fetch("/api/guide", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      message,
+      history: history.slice(-8).map((m) => ({
+        role: m.role,
+        content: m.text,
+      })),
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || `Guide error ${res.status}`);
   }
-  if (q.includes("passkey") || q.includes("login") || q.includes("face") || q.includes("touch")) {
-    return "Employees sign in with a **real device passkey** (Face ID / Touch ID / Windows Hello). First visit registers a passkey; later visits authenticate. Withdrawals require that session — random API calls without login are blocked.";
-  }
-  if (q.includes("withdraw") || q.includes("payout") || q.includes("cash out")) {
-    return "As time passes, the streaming contract **unlocks** salary second-by-second. Employees open the Employee portal, passkey-login, then Withdraw. Funds come from the vault **buffer** (and can rebalance from Blend if needed). Only unlocked amount can leave.";
-  }
-  if (q.includes("buffer") || q.includes("blend") || q.includes("yield") || q.includes("apy") || q.includes("defindex")) {
-    return "Employer deposits USDC into the YieldFlow vault. About **15% stays liquid (buffer)** for near-term employee withdrawals. About **85% is supplied to Blend** to earn yield. DeFindex is integrated as the **strategy-layer reference** (DeFindex → Blend style architecture). Headline APY is estimated from live Blend reserve data.";
-  }
-  if (q.includes("employer") || q.includes("deposit") || q.includes("fund") || q.includes("treasury")) {
-    return "Employers use the **Treasury Vault** dashboard: see pool, buffer, yield split, and fund the vault. Funding is a real on-chain deposit (testnet USDC). Approvals authorize employee streams. Admin console can also deposit with the operator admin key.";
-  }
-  if (q.includes("employee") || q.includes("salary") || q.includes("stream") || q.includes("wage")) {
-    return "Each employee has a **stream**: total amount over a time window (e.g. $50 over 30 days on the demo). Balance unlocks continuously. The UI counter resyncs from chain so it stays continuous when you leave and return.";
-  }
-  if (q.includes("admin") || q.includes("operator") || q.includes("key")) {
-    return "There is an **Admin console** in the menu (06). Unlock with the server admin API key (YIELDFLOW_ADMIN_API_KEY). That key is for operators only — deposit/stream via API header. Normal users never need it. Employee withdraw uses passkey session, not the admin key.";
-  }
-  if (q.includes("secure") || q.includes("safe") || q.includes("hack") || q.includes("risk")) {
-    return "Hardened for testnet demo: passkey sessions required for withdraw, CSRF on browser money actions, CORS locked, rate limits. Still not bank-grade: server hot signer exists, no formal audit, and this is testnet. Don’t put large real funds until mainnet custody is redesigned.";
-  }
-  if (q.includes("how") || q.includes("work") || q.includes("payroll") || q.includes("explain") || q.includes("what is")) {
-    return "YieldFlow is **streaming payroll on Stellar**:\n1) Employer deposits USDC once.\n2) Vault keeps a liquid buffer and puts the rest into Blend yield.\n3) Employee salary unlocks every second on-chain.\n4) Employee passkey-authenticates and withdraws unlocked USDC.\nThat removes “idle payroll sitting in a bank until month-end” while keeping instant access for workers.";
-  }
-  return "I can explain YieldFlow mechanics: employer vault, buffer vs Blend yield, employee streaming, passkeys, withdraws, admin vs user roles, and testnet vs mainnet. Try: “How does payroll work?” or “What is the buffer?”";
+  return {
+    reply: String((data as { reply?: string }).reply || localAnswer(message)),
+    source: (data as { source?: string }).source,
+  };
 }
 
 export function GuideAgent() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([
     {
       role: "assistant",
-      text: "Hi — I’m the YieldFlow guide. Ask how streaming payroll, Blend yield, passkeys, or withdraws work.",
+      text: "Hi — I’m the YieldFlow guide. Ask how streaming payroll, Blend yield, passkeys, or withdraws work. I never share secrets or admin keys.",
     },
   ]);
   const endRef = useRef<HTMLDivElement>(null);
@@ -58,11 +78,26 @@ export function GuideAgent() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, open]);
 
-  const send = (text: string) => {
+  // Warm CSRF cookie for /api/guide
+  useEffect(() => {
+    void fetch("/api/health", { credentials: "include" }).catch(() => undefined);
+  }, []);
+
+  const send = async (text: string) => {
     const q = text.trim();
-    if (!q) return;
-    setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: answer(q) }]);
+    if (!q || busy) return;
+    setBusy(true);
+    setMsgs((m) => [...m, { role: "user", text: q }]);
     setInput("");
+    try {
+      const history = [...msgs, { role: "user" as const, text: q }];
+      const { reply } = await askServer(q, history);
+      setMsgs((m) => [...m, { role: "assistant", text: reply }]);
+    } catch {
+      setMsgs((m) => [...m, { role: "assistant", text: localAnswer(q) }]);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const panel = useMemo(
@@ -97,7 +132,9 @@ export function GuideAgent() {
             <div className="label" style={{ color: "var(--theme-accent)" }}>
               YIELDFLOW GUIDE
             </div>
-            <div style={{ fontSize: "13px", color: "var(--grey-300)" }}>AI product assistant</div>
+            <div style={{ fontSize: "13px", color: "var(--grey-300)" }}>
+              AI assistant · secrets never shared
+            </div>
           </div>
           <button className="btn btn-outline" style={{ fontSize: "11px", padding: "6px 10px" }} onClick={() => setOpen(false)}>
             Close
@@ -123,6 +160,11 @@ export function GuideAgent() {
               {m.text}
             </div>
           ))}
+          {busy && (
+            <div className="label" style={{ color: "var(--grey-300)" }}>
+              Thinking…
+            </div>
+          )}
           <div ref={endRef} />
         </div>
 
@@ -134,7 +176,8 @@ export function GuideAgent() {
                 type="button"
                 className="btn btn-outline"
                 style={{ fontSize: "10px", padding: "6px 8px" }}
-                onClick={() => send(s)}
+                disabled={busy}
+                onClick={() => void send(s)}
               >
                 {s}
               </button>
@@ -143,7 +186,7 @@ export function GuideAgent() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              send(input);
+              void send(input);
             }}
             style={{ display: "flex", gap: "8px" }}
           >
@@ -151,6 +194,7 @@ export function GuideAgent() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask how payroll works…"
+              disabled={busy}
               style={{
                 flex: 1,
                 padding: "10px 12px",
@@ -160,14 +204,14 @@ export function GuideAgent() {
                 fontSize: "13px",
               }}
             />
-            <button className="btn" type="submit" style={{ fontSize: "12px" }}>
+            <button className="btn" type="submit" style={{ fontSize: "12px" }} disabled={busy}>
               Send
             </button>
           </form>
         </div>
       </div>
     ),
-    [msgs, input]
+    [msgs, input, busy]
   );
 
   return (

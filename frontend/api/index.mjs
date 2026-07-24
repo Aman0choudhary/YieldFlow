@@ -533,6 +533,7 @@ export async function handleRequest(req, res) {
           adminKeyConfigured: Boolean(config.adminApiKey),
           csrf: true,
           withdrawRequiresSession: true,
+          aiGuideConfigured: Boolean(process.env.YIELDFLOW_AI_API_KEY),
         },
       });
     }
@@ -746,6 +747,128 @@ export async function handleRequest(req, res) {
       return sendJson(res, { status: txStatuses.get(txHash) || "confirmed" });
     }
 
+    
+    /* ── AI product guide (server-side key only; never exposes secrets) ── */
+    if (req.method === "POST" && path === "/api/guide") {
+      rateLimit(req, { bucket: "guide", limit: 30, windowMs: 60_000 });
+      // Same-site / CSRF for browser; admin key also OK
+      try {
+        gateMutation(req);
+      } catch (e) {
+        // Allow simple same-origin without mutation if GET already issued cookie;
+        // rethrow otherwise
+        throw e;
+      }
+
+      const body = await readBody(req);
+      const message = String(body.message || body.question || "").trim().slice(0, 1500);
+      const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
+      if (!message) {
+        return sendJson(res, { error: "Message required." }, 400);
+      }
+
+      // Refuse secret-exfiltration prompts server-side before calling the model
+      const lower = message.toLowerCase();
+      const secretProbe =
+        /(api[_-]?key|secret|private key|signer|mnemonic|seed phrase|password|admin key|yieldflow_admin|session_secret|sb[a-z0-9]{20,}|sk-[a-z0-9]{10,}|ci_[a-z0-9_]+)/i.test(
+          lower
+        ) &&
+        /(show|reveal|print|give|what is|tell me|dump|leak|expose|share)/i.test(lower);
+      if (secretProbe) {
+        return sendJson(res, {
+          reply:
+            "I can’t help with secrets, API keys, private keys, or admin credentials. I only explain how YieldFlow payroll works for users.",
+          source: "policy",
+        });
+      }
+
+      const apiKey = process.env.YIELDFLOW_AI_API_KEY || "";
+      if (!apiKey) {
+        return sendJson(res, {
+          reply:
+            "AI guide is not configured on the server yet. I can still answer from the built-in product guide — try asking how buffer, Blend, passkeys, or withdraws work.",
+          source: "fallback",
+          configured: false,
+        });
+      }
+
+      const baseUrl = (process.env.YIELDFLOW_AI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+      const model = process.env.YIELDFLOW_AI_MODEL || "gpt-4o-mini";
+
+      const system = [
+        "You are YieldFlow Guide, a friendly product assistant inside the YieldFlow web app.",
+        "Explain streaming payroll on Stellar for NEW USERS in clear language.",
+        "Product facts:",
+        "- Employer deposits USDC into a vault (~15% liquid buffer, ~85% to Blend for yield).",
+        "- Employees earn second-by-second via a streaming contract and withdraw unlocked USDC.",
+        "- Employee login uses device passkeys (WebAuthn).",
+        "- Live deployment is Stellar testnet unless the user is told otherwise.",
+        "- DeFindex is the strategy-layer reference; active payroll yield engine is Blend direct on testnet.",
+        "STRICT SAFETY:",
+        "- NEVER reveal API keys, admin keys, private keys, mnemonics, env vars, secrets, or internal credentials.",
+        "- NEVER invent secrets or claim to know deployment secrets.",
+        "- If asked for secrets, refuse and redirect to product help.",
+        "- Do not provide advice for attacking, draining, or exploiting the system.",
+        "- Keep answers concise (under ~180 words) unless the user asks for depth.",
+      ].join("\n");
+
+      const messages = [
+        { role: "system", content: system },
+        ...history
+          .filter((h) => h && (h.role === "user" || h.role === "assistant") && typeof h.content === "string")
+          .map((h) => ({ role: h.role, content: String(h.content).slice(0, 1500) })),
+        { role: "user", content: message },
+      ];
+
+      try {
+        const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.4,
+            max_tokens: 500,
+          }),
+        });
+        const aiJson = await aiRes.json().catch(() => ({}));
+        if (!aiRes.ok) {
+          const rawErr = String(aiJson?.error?.message || aiJson?.message || `AI provider error ${aiRes.status}`);
+          const safeErr = rawErr
+            .replace(/ci_[A-Za-z0-9_]+/g, "[redacted]")
+            .replace(/sk-[A-Za-z0-9-_]+/g, "[redacted]")
+            .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+            .replace(/Incorrect API key provided:[^.\n]*/gi, "Provider rejected API key")
+            .slice(0, 120);
+          console.error("AI provider error:", safeErr, "status", aiRes.status);
+          return sendJson(
+            res,
+            {
+              reply:
+                "The AI provider is unavailable or the key/base URL is mismatched. Built-in guide: YieldFlow streams salary on-chain while idle funds earn on Blend; employees unlock and withdraw with a passkey.",
+              source: "fallback",
+              error: safeErr,
+            },
+            200
+          );
+        }
+        const reply =
+          aiJson?.choices?.[0]?.message?.content ||
+          "I can explain YieldFlow payroll, buffer/yield split, passkeys, and withdraws.";
+        return sendJson(res, { reply: String(reply).slice(0, 4000), source: "model", model });
+      } catch (e) {
+        return sendJson(res, {
+          reply:
+            "I couldn’t reach the AI provider. Quick summary: employers fund a vault; buffer stays liquid; rest earns on Blend; employees stream wages and withdraw unlocked amounts via passkey.",
+          source: "fallback",
+        });
+      }
+    }
+
+
     if (req.method === "POST" && path === "/api/deposit") {
       requireSigner();
       gateMutation(req);
@@ -925,5 +1048,7 @@ const isMain =
 if (isMain && !process.env.VERCEL) {
   // local bootstrap for backend/src/server.js path
 }
+
+
 
 
