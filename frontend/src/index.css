@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'NON Natural Grotesk';
-  src: local('NON Natural Grotesk Regular'), local('NON Natural Grotesk'), url('/fonts/NON-Natural-Grotesk-Regular.woff2') format('woff2');
+  src: local('NON Natural Grotesk Regular'), local('NON Natural Grotesk'), url('/NON-Natural-Grotesk-Regular.woff2') format('woff2');
   font-display: swap;
   font-weight: 400;
   font-style: normal;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: 'NON Natural Mono';
-  src: local('NON Natural Mono Light'), url('/fonts/NON Natural Mono-Light.woff2') format('woff2');
+  src: local('NON Natural Mono Light'), url('/NON Natural Mono-Light.woff2') format('woff2');
   font-display: swap;
   font-weight: 300;
   font-style: normal;
@@ -16,7 +16,7 @@
 
 @font-face {
   font-family: 'NON Natural Grotesk';
-  src: local('NON Natural Grotesk Bold'), url('/fonts/NON-Natural-Grotesk-Bold.woff2') format('woff2');
+  src: local('NON Natural Grotesk Bold'), url('/NON-Natural-Grotesk-Bold.woff2') format('woff2');
   font-display: swap;
   font-weight: 700;
   font-style: normal;
@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'FK Roman Standard';
-  src: local('FK Roman Standard Light'), url('/fonts/FKRomanStandard-Light.woff2') format('woff2');
+  src: local('FK Roman Standard Light'), url('/FKRomanStandard-Light.woff2') format('woff2');
   font-display: swap;
   font-weight: 300;
   font-style: normal;

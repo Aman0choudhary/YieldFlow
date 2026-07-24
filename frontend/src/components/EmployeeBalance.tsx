@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { sdk } from '../sdk/yieldflow-sdk';
-import type { EmployeeBalance as EmployeeBalanceType } from '../sdk/types';
-import { SectionHeader } from './SectionHeader';
+import { useEffect, useState } from "react";
+import { DEMO_EMPLOYEE_ADDRESS, sdk } from "../sdk/yieldflow-sdk";
+import type { EmployeeBalance as EmployeeBalanceType } from "../sdk/types";
+import { SectionHeader } from "./SectionHeader";
 
 function AnimatedDigit({ char }: { char: string }) {
   const [current, setCurrent] = useState(char);
@@ -18,12 +18,12 @@ function AnimatedDigit({ char }: { char: string }) {
     }
   }, [char, current]);
 
-  if (char === '.' || char === ',' || char === '$') {
+  if (char === "." || char === "," || char === "$") {
     return <span className="live-counter-digit">{char}</span>;
   }
 
   return (
-    <span className={`live-counter-digit ${changing ? 'changing text-gradient' : ''}`}>
+    <span className={`live-counter-digit ${changing ? "changing text-gradient" : ""}`}>
       {current}
     </span>
   );
@@ -31,107 +31,218 @@ function AnimatedDigit({ char }: { char: string }) {
 
 export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => void }) {
   const [data, setData] = useState<EmployeeBalanceType | null>(null);
-  const [liveValue, setLiveValue] = useState<number>(0);
-  const [startTime] = useState(Date.now());
+  const [employeeId, setEmployeeId] = useState<string>(DEMO_EMPLOYEE_ADDRESS);
+  const [liveValue, setLiveValue] = useState(0);
+  const [baseValue, setBaseValue] = useState(0);
+  const [rate, setRate] = useState(0);
+  const [tickStart, setTickStart] = useState(Date.now());
   const [loading, setLoading] = useState(true);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<
+    Array<{ id: string; date: string; amount: string; dest: string; status: string }>
+  >([]);
+
+  const refresh = async (id: string) => {
+    const res = await sdk.getEmployeeBalance(id);
+    setData(res);
+    setBaseValue(res.unlockedAmount);
+    setRate(res.ratePerSecond);
+    setLiveValue(res.unlockedAmount);
+    setTickStart(Date.now());
+    return res;
+  };
 
   useEffect(() => {
-    sdk.getEmployeeBalance('emp_001').then(res => {
-      setData(res);
-      setLiveValue(res.unlockedAmount);
-      setLoading(false);
-    });
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        let id = (await sdk.restoreEmployeeSession()).employeeId;
+        if (!id) {
+          const session = await sdk.loginEmployee();
+          id = session.employeeId;
+        }
+        if (cancelled) return;
+        setEmployeeId(id);
+        await refresh(id);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load employee balance");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!data) return;
     const interval = setInterval(() => {
-      const elapsedSeconds = (Date.now() - startTime) / 1000;
-      setLiveValue(data.unlockedAmount + elapsedSeconds * data.ratePerSecond);
-    }, 1000);
-
+      const elapsedSeconds = (Date.now() - tickStart) / 1000;
+      setLiveValue(baseValue + elapsedSeconds * rate);
+    }, 250);
     return () => clearInterval(interval);
-  }, [data, startTime]);
+  }, [data, baseValue, rate, tickStart]);
+
+  const handleWithdraw = async () => {
+    setWithdrawing(true);
+    setStatus(null);
+    setError(null);
+    try {
+      const result = await sdk.withdraw(employeeId);
+      if (result.status === "failed") {
+        setError("Withdrawal failed on-chain.");
+      } else {
+        setStatus(`Withdrew $${result.amountReceived.toFixed(4)} · ${result.txId.slice(0, 14)}…`);
+        setHistory((prev) => [
+          {
+            id: result.txId.slice(0, 10),
+            date: new Date().toISOString().replace("T", " ").slice(0, 16),
+            amount: `$${result.amountReceived.toFixed(4)}`,
+            dest: "Stellar Wallet (testnet USDC)",
+            status: result.status === "success" ? "Settled" : "Pending",
+          },
+          ...prev,
+        ].slice(0, 8));
+        await refresh(employeeId);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to withdraw");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="df-cell hero-content" style={{ minHeight: '60vh', justifyContent: 'center' }}>
+      <div className="df-cell hero-content" style={{ minHeight: "60vh", justifyContent: "center" }}>
         <h2 className="text-gradient">Authenticating Passkey...</h2>
       </div>
     );
   }
 
-  const formattedValue = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  if (!data) {
+    return (
+      <div className="df-cell hero-content" style={{ minHeight: "60vh", justifyContent: "center" }}>
+        <h2>Employee session failed</h2>
+        <p style={{ color: "var(--pink)", marginTop: "var(--spacer-12)" }}>{error}</p>
+        <button className="btn" style={{ marginTop: "var(--spacer-16)" }} onClick={() => onNavigate?.("login")}>
+          Back to Login
+        </button>
+      </div>
+    );
+  }
+
+  const formattedValue = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 5,
-    maximumFractionDigits: 5
+    maximumFractionDigits: 5,
   }).format(liveValue);
 
-  const mockWithdrawals = [
-    { id: 'w_101', date: '2026-07-22 14:02', amount: '$450.00', dest: 'Bank Transfer (USDC)', status: 'Settled' },
-    { id: 'w_102', date: '2026-07-18 09:15', amount: '$820.00', dest: 'Stellar Wallet', status: 'Settled' },
-    { id: 'w_103', date: '2026-07-14 17:40', amount: '$300.00', dest: 'Bank Transfer (USDC)', status: 'Settled' }
-  ];
+  const short = `${employeeId.slice(0, 6)}…${employeeId.slice(-4)}`;
 
   return (
     <>
-      {/* Navigation bar at top of page */}
       {onNavigate && (
-        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 var(--spacer-24)', marginTop: 'var(--spacer-16)' }}>
-          <button className="btn btn-outline" style={{ fontSize: '12px' }} onClick={() => onNavigate('login')}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "0 var(--spacer-24)",
+            marginTop: "var(--spacer-16)",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("login")}>
             ← Back to Home Landing
+          </button>
+          <span className="label" style={{ color: "var(--grey-300)" }}>
+            Session {short}
+          </span>
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: "12px" }}
+            onClick={() => {
+              sdk.logoutEmployee();
+              onNavigate("login");
+            }}
+          >
+            Sign out
           </button>
         </div>
       )}
 
-      {/* 01 — UNLOCKED EARNINGS */}
-      <section className="section-block" style={{ paddingTop: 'var(--spacer-16)' }}>
+      <section className="section-block" style={{ paddingTop: "var(--spacer-16)" }}>
         <SectionHeader
           index="01"
           eyebrow="LIVE EARNINGS STREAM"
           thesis="Your wages unlocking second-by-second."
-          paragraph="Powered by Soroban real-time stream contracts. Withdraw any portion of your unlocked balance instantly."
+          paragraph="Live unlocked balance from the Streaming contract on Stellar testnet."
         />
 
-        <div className="df-grid" style={{ marginTop: 'var(--spacer-24)' }}>
-          <div className="df-cell full-width slide-up" style={{ textAlign: 'center', padding: 'var(--spacer-48) var(--spacer-24)' }}>
-            <span className="label" style={{ color: 'var(--theme-accent)', display: 'block', marginBottom: 'var(--spacer-16)' }}>
+        <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
+          <div
+            className="df-cell full-width slide-up"
+            style={{ textAlign: "center", padding: "var(--spacer-48) var(--spacer-24)" }}
+          >
+            <span
+              className="label"
+              style={{ color: "var(--theme-accent)", display: "block", marginBottom: "var(--spacer-16)" }}
+            >
               AVAILABLE LIQUID BALANCE
             </span>
-            <h1 className="display" style={{ fontSize: 'clamp(44px, 9vw, 150px)' }}>
-              {formattedValue.split('').map((char, i) => (
-                <AnimatedDigit key={i} char={char} />
+            <h1 className="display" style={{ fontSize: "clamp(44px, 9vw, 150px)" }}>
+              {formattedValue.split("").map((char, i) => (
+                <AnimatedDigit key={`${i}-${char}`} char={char} />
               ))}
             </h1>
-            <p className="large" style={{ marginTop: 'var(--spacer-24)', color: 'var(--grey-300)' }}>
-              Stream Rate: <span style={{ color: 'var(--theme-fg)', fontWeight: 600 }}>${(data?.ratePerSecond! * 3600).toFixed(2)}/hr</span>
+            <p className="large" style={{ marginTop: "var(--spacer-24)", color: "var(--grey-300)" }}>
+              Stream Rate:{" "}
+              <span style={{ color: "var(--theme-fg)", fontWeight: 600 }}>
+                ${(rate * 3600).toFixed(4)}/hr
+              </span>
+              {data.nextPayday ? ` · Next: ${data.nextPayday}` : ""}
             </p>
 
-            <div style={{ marginTop: 'var(--spacer-32)' }}>
+            <div style={{ marginTop: "var(--spacer-32)" }}>
               <button
                 className="btn"
-                style={{ fontSize: '16px', padding: 'var(--spacer-16) var(--spacer-32)' }}
-                onClick={() => alert(`Successfully initiated instant withdrawal of ${formattedValue}`)}
+                style={{ fontSize: "16px", padding: "var(--spacer-16) var(--spacer-32)" }}
+                onClick={() => void handleWithdraw()}
+                disabled={withdrawing}
               >
-                Withdraw Instantly (Zero Fee)
+                {withdrawing ? "Withdrawing…" : "Withdraw Instantly (Zero Fee)"}
               </button>
             </div>
+            {status && (
+              <p className="label" style={{ marginTop: "var(--spacer-16)", color: "var(--theme-accent)" }}>
+                {status}
+              </p>
+            )}
+            {error && (
+              <p className="label" style={{ marginTop: "var(--spacer-16)", color: "var(--pink)" }}>
+                {error}
+              </p>
+            )}
           </div>
         </div>
       </section>
 
-      {/* 02 — WITHDRAWAL HISTORY */}
       <section className="section-block">
         <SectionHeader
           index="02"
           eyebrow="SETTLEMENTS"
-          thesis="Instant off-ramps with zero protocol fee."
-          paragraph="Past salary claims executed on the Stellar network."
+          thesis="Withdrawals from this session."
+          paragraph="Live withdraws appear here after you request payout."
         />
-
-        <div className="df-grid" style={{ marginTop: 'var(--spacer-24)' }}>
-          <div className="df-cell full-width slide-up" style={{ animationDelay: '0.2s', padding: 0 }}>
+        <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
+          <div className="df-cell full-width slide-up" style={{ animationDelay: "0.2s", padding: 0 }}>
             <table className="table-df">
               <thead>
                 <tr>
@@ -143,14 +254,23 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
                 </tr>
               </thead>
               <tbody>
-                {mockWithdrawals.map((item) => (
+                {history.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ color: "var(--grey-300)" }}>
+                      No withdrawals in this session yet.
+                    </td>
+                  </tr>
+                )}
+                {history.map((item) => (
                   <tr key={item.id}>
-                    <td style={{ color: 'var(--grey-300)' }}>{item.id}</td>
-                    <td style={{ color: 'var(--grey-300)' }}>{item.date}</td>
+                    <td style={{ color: "var(--grey-300)" }}>{item.id}</td>
+                    <td style={{ color: "var(--grey-300)" }}>{item.date}</td>
                     <td>{item.dest}</td>
-                    <td style={{ fontWeight: 600, color: 'var(--theme-accent)' }}>{item.amount}</td>
+                    <td style={{ fontWeight: 600, color: "var(--theme-accent)" }}>{item.amount}</td>
                     <td>
-                      <span className="label" style={{ color: 'var(--theme-accent)' }}>{item.status}</span>
+                      <span className="label" style={{ color: "var(--theme-accent)" }}>
+                        {item.status}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -160,64 +280,29 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
         </div>
       </section>
 
-      {/* 03 — YIELD BREAKDOWN */}
       <section className="section-block">
         <SectionHeader
           index="03"
-          eyebrow="HOW YOU EARN"
-          thesis="Employer yield offsets protocol fees for workers."
-          paragraph="While your salary sits un-claimed in the employer's smart vault, it generates interest in Stellar money markets. That yield subsidizes free instant withdrawals and network gas for all employees."
-        />
-
-        <div className="df-grid" style={{ marginTop: 'var(--spacer-24)' }}>
-          <div className="df-cell grid-2-cell slide-up" style={{ animationDelay: '0.2s' }}>
-            <span className="label" style={{ color: 'var(--grey-300)' }}>01 / NO LOCKUPS</span>
-            <h3 style={{ marginTop: 'var(--spacer-12)', marginBottom: 'var(--spacer-8)' }}>100% On-Demand Access</h3>
-            <p style={{ color: 'var(--grey-300)' }}>
-              You don't need to wait until payday. As hours pass, your wages become available immediately.
-            </p>
-          </div>
-
-          <div className="df-cell grid-2-cell slide-up" style={{ animationDelay: '0.3s' }}>
-            <span className="label" style={{ color: 'var(--grey-300)' }}>02 / ZERO COST</span>
-            <h3 style={{ marginTop: 'var(--spacer-12)', marginBottom: 'var(--spacer-8)' }}>Free Off-Ramping</h3>
-            <p style={{ color: 'var(--grey-300)' }}>
-              Gas and bridge costs are fully covered by treasury yield generation events.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 04 — ACCOUNT SETTINGS / SECURITY */}
-      <section className="section-block">
-        <SectionHeader
-          index="04"
           eyebrow="SECURITY"
-          thesis="Cryptographic passkey authentication on Soroban."
-          paragraph="Your account is secured by hardware-backed WebAuthn credentials. No private key management required."
+          thesis="Demo passkey session bound to testnet employee."
+          paragraph="MVP uses a server-mediated demo session for the fixed testnet employee account. Real multi-user Passkey Kit is next."
         />
-
-        <div className="df-grid" style={{ marginTop: 'var(--spacer-24)' }}>
-          <div className="df-cell grid-2-cell slide-up" style={{ animationDelay: '0.2s' }}>
-            <span className="label" style={{ color: 'var(--theme-accent)' }}>PASSKEY STATUS</span>
-            <h3 style={{ marginTop: 'var(--spacer-12)' }}>Hardware Enclave Active</h3>
-            <p style={{ marginTop: 'var(--spacer-8)', color: 'var(--grey-300)' }}>
-              Passkey signature verification bound to Soroban Smart Account `G...9A4F`.
-            </p>
+        <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
+          <div className="df-cell grid-2-cell slide-up">
+            <span className="label" style={{ color: "var(--theme-accent)" }}>
+              SESSION WALLET
+            </span>
+            <h3 style={{ marginTop: "var(--spacer-12)", fontFamily: "NON Natural Mono", fontSize: "16px" }}>
+              {employeeId}
+            </h3>
           </div>
-
-          <div className="df-cell grid-2-cell slide-up" style={{ animationDelay: '0.3s' }}>
-            <span className="label" style={{ color: 'var(--grey-300)' }}>AUTHENTICATED DEVICES</span>
-            <div style={{ marginTop: 'var(--spacer-16)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--spacer-8) 0', borderBottom: '1px solid var(--grey-100)' }}>
-                <span>iPhone 15 Pro (FaceID Passkey)</span>
-                <span className="label" style={{ color: 'var(--theme-accent)' }}>PRIMARY</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--spacer-8) 0' }}>
-                <span>MacBook Pro TouchID</span>
-                <span className="label" style={{ color: 'var(--grey-300)' }}>BACKUP</span>
-              </div>
-            </div>
+          <div className="df-cell grid-2-cell slide-up">
+            <span className="label" style={{ color: "var(--grey-300)" }}>
+              STREAM CAP
+            </span>
+            <h3 style={{ marginTop: "var(--spacer-12)" }}>
+              ${(data.streamCap ?? 0).toFixed(4)} · streamed ${(data.totalStreamed ?? 0).toFixed(4)}
+            </h3>
           </div>
         </div>
       </section>

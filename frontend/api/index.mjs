@@ -318,6 +318,7 @@ export default async function handler(req, res) {
           "GET /api/employer",
           "GET /api/employee/balance?employeeId=...",
           "POST /api/deposit",
+          "POST /api/stream/create",
           "POST /api/withdraw",
         ],
       });
@@ -397,6 +398,54 @@ export default async function handler(req, res) {
     }
 
     /* â”€â”€ Withdraw (state-changing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+    /* ── Create / ensure employee stream (state-changing) ── */
+    if (req.method === "POST" && path === "/api/stream/create") {
+      requireSigner();
+      const body = await readBody(req);
+      const employee = body.employeeId || config.employeeAddress;
+
+      // If stream already exists, balance/get works — treat as approved
+      try {
+        const existing = await streaming.simulate("balance", [toAddr(employee)]);
+        const total = BigInt(existing?.total_amount || existing?.totalAmount || 0);
+        if (total > 0n) {
+          return sendJson(res, {
+            approved: true,
+            status: "confirmed",
+            message: "Stream already exists on-chain.",
+            employeeId: employee,
+          });
+        }
+      } catch (_) {
+        // no stream yet — create below
+      }
+
+      const amountHuman = normalizeAmount(body.totalAmount || "5");
+      const amountUnits = toBaseUnits(amountHuman);
+      const durationDays = Math.max(1, Number(body.durationDays || 30));
+      const nowSec = Math.floor(Date.now() / 1000);
+      const start = BigInt(nowSec);
+      const end = BigInt(nowSec + durationDays * 24 * 60 * 60);
+
+      const { hash } = await streaming.execute("create_stream", [
+        toAddr(employee),
+        toI128(amountUnits),
+        nativeToScVal(start, { type: "u64" }),
+        nativeToScVal(end, { type: "u64" }),
+      ]);
+
+      if (hash) txStatuses.set(hash, "confirmed");
+
+      return sendJson(res, {
+        approved: true,
+        status: "confirmed",
+        txHash: hash || `stream_${Date.now()}`,
+        message: "Stream created on-chain.",
+        employeeId: employee,
+      });
+    }
+
     if (req.method === "POST" && path === "/api/withdraw") {
       requireSigner();
       const body = await readBody(req);
