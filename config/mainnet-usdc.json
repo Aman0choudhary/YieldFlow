@@ -1,9 +1,30 @@
-{
+﻿{
   "network": "mainnet",
   "rpcUrl": "https://mainnet.sorobanrpc.com",
   "networkPassphrase": "Public Global Stellar Network ; September 2015",
   "usdcAssetCode": "USDC",
   "usdcAssetIssuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
-  "usdcTokenContractId": "REPLACE_WITH_MAINNET_USDC_SAC",
-  "notes": "Circle mainnet USDC issuer above is the common Stellar USDC issuer. Confirm SAC id with stellar contract id asset before deploy."
+  "usdcTokenContractId": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+  "usdcSacVerifiedWith": "stellar contract id asset --asset USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN --network mainnet",
+  "blend": {
+    "usdcToken": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+    "backstopV2": "CAQQR5SWBXKIGZKPBZDH3KM5GQ5GUTPKB7JAFCINLZBC5WXPJKRG3IM7",
+    "poolFactoryV2": "CDSYOAVXFY7SM5S64IZPPPYB4GVGGLMQVFREPSQQEZVIWXX5R23G4QSU",
+    "pools": {
+      "FixedV2": "CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD",
+      "YieldBloxV2": "CCCCIQSDILITHMM7PBSLVDT5MISSY7R26MNZXCX4H7J5JQ5FPIYOGYFS",
+      "notes": "Confirm which pool lists Circle mainnet USDC SAC before set_blend_pool. Prefer a USDC-containing reward-zone pool."
+    }
+  },
+  "defindex": {
+    "factory": "CDKFHFJIET3A73A2YN4KV7NSV32S6YGQMUFH3DNJXLBWL4SKEGVRNFKI",
+    "usdcBlendStrategy": "CDB2WMKQQNVZMEBY7Q7GZ5C7E7IAFSNMZ7GGVD6WKTCEWK7XOIAVZSAP",
+    "soroswapEarnUsdcVault": "CA2FIPJ7U6BG3N7EOZFI74XPJZOEOD4TYWXFVCIO5VDCHTVAGS6F4UKK",
+    "notes": "On mainnet Circle USDC SAC matches Blend USDC id — DeFindex deposit path is viable after YieldFlow vault deploy."
+  },
+  "deployerBudget": {
+    "recommendedXlm": "50+",
+    "userNote": "User has ~50 XLM in Freighter reserved for deploy. Do not spend until explicit go."
+  },
+  "status": "PREP_ONLY_NO_DEPLOY"
 }

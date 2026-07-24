@@ -1,0 +1,17 @@
+﻿{
+  "network": "mainnet",
+  "status": "NOT_DEPLOYED",
+  "rpcUrl": "https://mainnet.sorobanrpc.com",
+  "networkPassphrase": "Public Global Stellar Network ; September 2015",
+  "employer_address": "REPLACE_AFTER_DEPLOY",
+  "token_contract_id": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+  "streaming_contract_id": "REPLACE_AFTER_DEPLOY",
+  "vault_contract_id": "REPLACE_AFTER_DEPLOY",
+  "blend_pool_id": "REPLACE_AFTER_CONFIRMING_USDC_POOL",
+  "defindex_vault_id": "CA2FIPJ7U6BG3N7EOZFI74XPJZOEOD4TYWXFVCIO5VDCHTVAGS6F4UKK",
+  "defindex_strategy_id": "CDB2WMKQQNVZMEBY7Q7GZ5C7E7IAFSNMZ7GGVD6WKTCEWK7XOIAVZSAP",
+  "defindex_factory_id": "CDKFHFJIET3A73A2YN4KV7NSV32S6YGQMUFH3DNJXLBWL4SKEGVRNFKI",
+  "buffer_bps": 1500,
+  "yield_bps": 8500,
+  "deployed_at": null
+}

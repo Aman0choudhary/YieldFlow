@@ -1,4 +1,4 @@
-# Deployment Notes
+﻿# Deployment Notes
 
 These commands are Aman-side only and use the installed `stellar 26.0.0` CLI.
 
@@ -66,3 +66,9 @@ After `deployments/testnet.json` exists, these helpers call the deployed contrac
 ```
 
 Amounts are human USDC values and are converted to 7-decimal token units before contract invocation.
+
+
+## Mainnet
+
+See [MAINNET_READINESS.md](./MAINNET_READINESS.md). Do not deploy mainnet until explicitly approved.
+

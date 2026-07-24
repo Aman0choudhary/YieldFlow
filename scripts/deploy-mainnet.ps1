@@ -1,3 +1,9 @@
+﻿# =============================================================================
+# PREP GATE: Do NOT run this script until the user explicitly says
+#   "go mainnet deploy"
+# Prerequisites checklist: docs/MAINNET_READINESS.md
+# Token (Circle USDC SAC): CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75
+# =============================================================================
 # Deploy YieldFlow contracts to Stellar MAINNET when funded with XLM.
 # Usage:
 #   .\scripts\deploy-mainnet.ps1 -SourceAccount yieldflow-mainnet -TokenContractId C...USDC_SAC...
