@@ -3,7 +3,6 @@ import { DEMO_EMPLOYEE_ADDRESS, sdk } from "../sdk/yieldflow-sdk";
 import type { EmployeeBalance as EmployeeBalanceType } from "../sdk/types";
 import { SectionHeader } from "./SectionHeader";
 import { Modal } from "./Modal";
-import { friendlyError, loadLocalWithdrawals, pushLocalWithdrawal } from "../sdk/local-persist";
 
 function AnimatedDigit({ char }: { char: string }) {
   const [current, setCurrent] = useState(char);
@@ -43,22 +42,17 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<string>("");
   const [history, setHistory] = useState<
     Array<{ id: string; date: string; amount: string; dest: string; status: string }>
-  >(() => (typeof window !== "undefined" ? loadLocalWithdrawals() : []));
-  const [lastSync, setLastSync] = useState<string | null>(null);
+  >([]);
 
-  const refresh = async (id: string, opts?: { soft?: boolean }) => {
+  const refresh = async (id: string) => {
     const res = await sdk.getEmployeeBalance(id);
     setData(res);
-    // Soft resync keeps the counter continuous if chain value is close to live estimate.
     setBaseValue(res.unlockedAmount);
     setRate(res.ratePerSecond);
-    if (!opts?.soft) {
-      setLiveValue(res.unlockedAmount);
-    } else {
-      setLiveValue((prev) => Math.max(res.unlockedAmount, prev));
-    }
+    setLiveValue(res.unlockedAmount);
     setTickStart(Date.now());
     setLastSync(new Date().toLocaleTimeString());
     return res;
@@ -93,22 +87,10 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
     if (!data) return;
     const interval = setInterval(() => {
       const elapsedSeconds = (Date.now() - tickStart) / 1000;
-      const cap = data.streamCap ?? Number.POSITIVE_INFINITY;
-      const next = baseValue + elapsedSeconds * rate;
-      setLiveValue(Math.min(next, cap));
+      setLiveValue(baseValue + elapsedSeconds * rate);
     }, 250);
     return () => clearInterval(interval);
   }, [data, baseValue, rate, tickStart]);
-
-  // resync every 8s so leaving/returning or tab sleep does not desync from chain
-  useEffect(() => {
-    if (!employeeId || loading) return;
-    const id = employeeId;
-    const poll = setInterval(() => {
-      void refresh(id, { soft: true }).catch(() => undefined);
-    }, 8000);
-    return () => clearInterval(poll);
-  }, [employeeId, loading]);
 
   const handleWithdraw = async () => {
     setWithdrawing(true);
@@ -119,7 +101,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
       if (result.status === "failed") {
         setError("Withdrawal failed on-chain.");
       } else {
-        setStatus(`Withdrew $${result.amountReceived.toFixed(4)} · ${result.txId.slice(0, 14)}…`);
+        setStatus(`Withdrew ${result.amountReceived.toFixed(4)} · ${result.txId.slice(0, 14)}…`);
         setHistory((prev) => [
           {
             id: result.txId.slice(0, 10),
@@ -143,7 +125,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
   if (loading) {
     return (
       <div className="df-cell hero-content" style={{ minHeight: "60vh", justifyContent: "center" }}>
-        <h2 className="text-gradient">Waiting for passkey…</h2>
+        <h2 className="text-gradient">Authenticating Passkey...</h2>
       </div>
     );
   }
@@ -171,36 +153,51 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
 
   return (
     <>
-      {onNavigate && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            padding: "0 var(--spacer-24)",
-            marginTop: "var(--spacer-16)",
-            gap: "12px",
-            flexWrap: "wrap",
-          }}
-        >
-          <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("login")}>
-            ← Back to Home Landing
-          </button>
-          <span className="label" style={{ color: "var(--grey-300)" }}>
-            Session {short}{lastSync ? ` · synced ${lastSync}` : ""}
+      {/* Clean Session Bar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "14px var(--spacer-24)",
+          marginTop: "var(--spacer-16)",
+          borderBottom: "1px solid var(--grey-100)",
+          backgroundColor: "rgba(255, 255, 255, 0.015)",
+          gap: "16px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span className="status-dot" style={{ backgroundColor: "var(--theme-accent)", boxShadow: "0 0 10px var(--theme-accent)" }} />
+          <span className="label" style={{ color: "var(--grey-300)", fontFamily: "NON Natural Mono", fontSize: "11px", letterSpacing: "0.06em" }}>
+            SESSION <strong style={{ color: "var(--theme-fg)" }}>{short}</strong>{lastSync ? ` · SYNCED ${lastSync}` : ""}
           </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <button
             className="btn btn-outline"
-            style={{ fontSize: "12px" }}
+            style={{ 
+              padding: "6px 14px", 
+              fontSize: "11px", 
+              fontFamily: "NON Natural Mono", 
+              letterSpacing: "0.06em" 
+            }}
             onClick={() => {
               sdk.logoutEmployee();
-              onNavigate("login");
+              onNavigate?.("login");
             }}
           >
-            Sign out
+            SIGN OUT
           </button>
           <button
             className="btn btn-outline"
-            style={{ fontSize: "12px" }}
+            style={{ 
+              padding: "6px 14px", 
+              fontSize: "11px", 
+              fontFamily: "NON Natural Mono", 
+              letterSpacing: "0.06em" 
+            }}
             onClick={() => {
               if (confirm("Remove this device passkey? You will register a new one next login.")) {
                 sdk.resetPasskey?.();
@@ -208,10 +205,10 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
               }
             }}
           >
-            Reset passkey
+            RESET PASSKEY
           </button>
         </div>
-      )}
+      </div>
 
       <section className="section-block" style={{ paddingTop: "var(--spacer-16)" }}>
         <SectionHeader
@@ -246,8 +243,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
               <span style={{ color: "var(--theme-fg)", fontWeight: 600 }}>
                 ${(rate * 3600).toFixed(4)}/hr
               </span>
-              {data.nextPayday ? ` · Remaining: ${data.nextPayday}` : ""}
-              {(data.streamCap ?? 0) > 0 ? ` · Cap ${(data.streamCap ?? 0).toFixed(2)}` : ""}
+              {data.nextPayday ? ` · Next: ${data.nextPayday}` : ""}
             </p>
 
             <div style={{ marginTop: "var(--spacer-32)" }}>
@@ -364,8 +360,8 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
         <SectionHeader
           index="03"
           eyebrow="SECURITY"
-          thesis="Device passkey protects this employee session."
-          paragraph="Login uses real browser WebAuthn (Face ID / Touch ID / Windows Hello). The passkey is bound to this device and the allowlisted testnet employee address."
+          thesis="Demo passkey session bound to testnet employee."
+          paragraph="MVP uses a server-mediated demo session for the fixed testnet employee account. Real multi-user Passkey Kit is next."
         />
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
           <div className="df-cell grid-2-cell slide-up">

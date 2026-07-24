@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { sdk } from "../sdk/yieldflow-sdk";
 import type { ActivityItem, EmployerStats } from "../sdk/types";
 import { SectionHeader } from "./SectionHeader";
@@ -47,7 +47,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
       setStatus(
         tx.status === "failed"
           ? `Deposit failed (${tx.txId})`
-          : `Deposit confirmed Â· 15% buffer / 85% Blend Â· ${tx.txId.slice(0, 12)}â€¦`
+          : `Deposit confirmed · 15% buffer / 85% Blend · ${tx.txId.slice(0, 12)}…`
       );
       await load();
     } catch (e) {
@@ -121,16 +121,13 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
           flexWrap: "wrap",
         }}
       >
-        <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("login")}>
-          â† Back to Home Landing
-        </button>
         <div className="label" style={{ color: "var(--grey-300)" }}>
-          Employer {employerAddress ? `${employerAddress.slice(0, 6)}â€¦${employerAddress.slice(-4)}` : "â€”"}
-          {" Â· "}
+          Employer {employerAddress ? `${employerAddress.slice(0, 6)}…${employerAddress.slice(-4)}` : "—"}
+          {" · "}
           <span style={{ color: "var(--theme-accent)" }}>Blend + DeFindex strategy stack</span>
         </div>
         <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("approvals")}>
-          Manage Stream Approvals â†’
+          Manage Stream Approvals →
         </button>
       </div>
 
@@ -246,7 +243,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
               </p>
             )}
             <p className="label" style={{ marginTop: "var(--spacer-12)", color: "var(--grey-300)" }}>
-              Need USDC? Circle testnet faucet â†’ employer GD2Xâ€¦ (see docs/TESTNET_MVP_STATUS.md)
+              Need USDC? Circle testnet faucet → employer GD2X… (see docs/TESTNET_MVP_STATUS.md)
             </p>
           </div>
         </div>
@@ -313,7 +310,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
                 <div style={{ textAlign: "right", border: "1px solid var(--theme-accent)", padding: "8px 16px", backgroundColor: "rgba(45, 212, 168, 0.05)" }}>
                   <span className="label" style={{ color: "var(--theme-accent)" }}>{activeChartPoint.day} Performance</span>
                   <div style={{ fontFamily: "NON Natural Mono", fontSize: "14px" }}>
-                    {activeChartPoint.apy}% APY Â· {activeChartPoint.yieldVal}
+                    {activeChartPoint.apy}% APY · {activeChartPoint.yieldVal}
                   </div>
                 </div>
               )}

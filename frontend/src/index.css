@@ -174,7 +174,7 @@ p {
 
 .section-meta-row {
   display: grid;
-  grid-template-columns: 80px 1fr;
+  grid-template-columns: minmax(90px, max-content) 1fr;
   gap: var(--spacer-24);
   align-items: start;
 }

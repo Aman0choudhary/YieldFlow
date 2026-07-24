@@ -131,45 +131,47 @@ export function Layout({
         </div>
 
         {/* Center: Dragonfly Unified Square Trigger Box (>|<  :::::  MENU) */}
-        <div 
-          className="header-center-trigger"
-          style={{ 
-            position: 'absolute',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            cursor: 'pointer', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            gap: '24px',
-            backgroundColor: '#07090b',
-            padding: '8px 18px',
-            border: '1px solid var(--grey-200)',
-            borderRadius: '0px',
-            minWidth: '280px'
-          }}
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-        >
-          <span style={{ fontFamily: 'NON Natural Mono', fontSize: '13px', letterSpacing: '0.1em' }}>{'>|<'}</span>
+        {!isMenuOpen && (
+          <div 
+            className="header-center-trigger"
+            style={{ 
+              position: 'absolute',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              gap: '24px',
+              backgroundColor: '#07090b',
+              padding: '8px 18px',
+              border: '1px solid var(--grey-200)',
+              borderRadius: '0px',
+              minWidth: '280px'
+            }}
+            onClick={() => setIsMenuOpen(true)}
+          >
+            <span style={{ fontFamily: 'NON Natural Mono', fontSize: '13px', letterSpacing: '0.1em' }}>{'>|<'}</span>
 
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-            <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-            <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-            <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-            <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+              <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+              <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+              <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+              <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+            </div>
+
+            <span style={{ 
+              fontFamily: 'NON Natural Mono',
+              fontWeight: 700, 
+              fontSize: '12px',
+              letterSpacing: '0.08em',
+              color: 'var(--theme-fg)'
+            }}>
+              MENU
+            </span>
           </div>
-
-          <span style={{ 
-            fontFamily: 'NON Natural Mono',
-            fontWeight: 700, 
-            fontSize: '12px',
-            letterSpacing: '0.08em',
-            color: isMenuOpen ? 'var(--theme-accent)' : 'var(--theme-fg)'
-          }}>
-            {isMenuOpen ? 'CLOSE [✕]' : 'MENU'}
-          </span>
-        </div>
+        )}
         
         {/* Right: Navigation actions */}
         <div className="site-nav">

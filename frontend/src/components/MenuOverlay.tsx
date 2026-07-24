@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Modal } from './Modal';
 
 interface MenuOverlayProps {
@@ -44,10 +44,10 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
               left: 0,
               width: '100vw',
               height: '100vh',
-              backgroundColor: 'rgba(0,0,0,0.75)',
-              backdropFilter: 'blur(6px)',
-              WebkitBackdropFilter: 'blur(6px)',
-              zIndex: 90
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              zIndex: 550
             }}
             onClick={onClose}
           />
@@ -57,7 +57,7 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
             className="menu-drawer-panel fade-in"
             style={{
               position: 'fixed',
-              top: '65px',
+              top: '16px',
               left: '50%',
               transform: 'translateX(-50%)',
               width: 'min(620px, 94vw)',
@@ -65,7 +65,7 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
               border: '1px solid var(--grey-200)',
               borderRadius: '0px',
               zIndex: 600,
-              boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(45, 212, 168, 0.1)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.95), 0 0 30px rgba(45, 212, 168, 0.1)',
               overflow: 'hidden'
             }}
           >
@@ -75,21 +75,21 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                padding: 'var(--spacer-16) var(--spacer-24)',
+                padding: '12px 24px',
                 borderBottom: '1px solid var(--grey-100)',
-                backgroundColor: 'rgba(255,255,255,0.02)'
+                backgroundColor: '#07090b'
               }}
             >
-              <div style={{ fontFamily: 'NON Natural Mono', fontSize: '14px', letterSpacing: '0.1em' }}>
+              <div style={{ fontFamily: 'NON Natural Mono', fontSize: '14px', letterSpacing: '0.1em', color: 'var(--theme-fg)' }}>
                 {'>|<'}
               </div>
 
               <div style={{ display: 'flex', gap: '4px' }}>
-                <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-                <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-                <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-                <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
-                <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+                <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+                <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+                <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+                <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
+                <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
               </div>
 
               <button 
@@ -97,13 +97,16 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
                 style={{ 
                   background: 'none', 
                   border: 'none', 
-                  color: 'var(--theme-fg)', 
+                  color: 'var(--theme-accent)', 
                   cursor: 'pointer',
-                  fontSize: '12px'
+                  fontSize: '12px',
+                  fontFamily: 'NON Natural Mono',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em'
                 }}
                 onClick={onClose}
               >
-                CLOSE [âœ•]
+                CLOSE [X]
               </button>
             </div>
 
@@ -119,7 +122,7 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
                     padding: 'var(--spacer-16) var(--spacer-24)',
                     borderBottom: '1px solid var(--grey-100)',
                     cursor: 'pointer',
-                    transition: 'background-color 0.2s, padding-left 0.2s'
+                    transition: 'background-color 0.2s'
                   }}
                   className="menu-row-item"
                   onClick={() => handleSelect(item)}
@@ -273,4 +276,3 @@ export function MenuOverlay({ isOpen, onClose, onNavigate }: MenuOverlayProps) {
     </>
   );
 }
-

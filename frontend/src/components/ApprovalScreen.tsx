@@ -108,7 +108,7 @@ export function ApprovalScreen({ onNavigate }: { onNavigate: (view: any) => void
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: "flex-start",
             alignItems: "center",
             padding: "0 var(--spacer-24)",
             marginBottom: "var(--spacer-16)",
@@ -116,9 +116,6 @@ export function ApprovalScreen({ onNavigate }: { onNavigate: (view: any) => void
             flexWrap: "wrap",
           }}
         >
-          <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("login")}>
-            ← Back to Home Landing
-          </button>
           <button className="btn btn-outline" style={{ fontSize: "12px" }} onClick={() => onNavigate("employer")}>
             ← Back to Treasury Dashboard
           </button>
