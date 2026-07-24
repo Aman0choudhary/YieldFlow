@@ -157,12 +157,17 @@ export function ApprovalScreen({ onNavigate }: { onNavigate: (view: any) => void
                                 : emp.status === "pending"
                                   ? "var(--orange)"
                                   : "var(--pink)",
+                            boxShadow:
+                              emp.status === "approved"
+                                ? "0 0 10px var(--theme-accent)"
+                                : "0 0 10px var(--orange)",
                           }}
                         />
                         <span
                           className="label"
                           style={{
                             color: emp.status === "approved" ? "var(--theme-accent)" : "var(--theme-fg)",
+                            textTransform: "uppercase",
                           }}
                         >
                           {emp.status}

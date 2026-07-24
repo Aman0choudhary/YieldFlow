@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DEMO_EMPLOYEE_ADDRESS, sdk } from "../sdk/yieldflow-sdk";
 import type { EmployeeBalance as EmployeeBalanceType } from "../sdk/types";
 import { SectionHeader } from "./SectionHeader";
+import { Modal } from "./Modal";
 
 function AnimatedDigit({ char }: { char: string }) {
   const [current, setCurrent] = useState(char);
@@ -19,7 +20,7 @@ function AnimatedDigit({ char }: { char: string }) {
   }, [char, current]);
 
   if (char === "." || char === "," || char === "$") {
-    return <span className="live-counter-digit">{char}</span>;
+    return <span className="live-counter-digit" style={{ color: "var(--theme-accent)" }}>{char}</span>;
   }
 
   return (
@@ -38,6 +39,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
   const [tickStart, setTickStart] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<
@@ -109,6 +111,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
           ...prev,
         ].slice(0, 8));
         await refresh(employeeId);
+        setShowWithdrawModal(false);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to withdraw");
@@ -191,12 +194,16 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
             className="df-cell full-width slide-up"
             style={{ textAlign: "center", padding: "var(--spacer-48) var(--spacer-24)" }}
           >
-            <span
-              className="label"
-              style={{ color: "var(--theme-accent)", display: "block", marginBottom: "var(--spacer-16)" }}
-            >
-              AVAILABLE LIQUID BALANCE
-            </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "var(--spacer-16)" }}>
+              <span className="status-dot" style={{ backgroundColor: "var(--theme-accent)", boxShadow: "0 0 12px var(--theme-accent)" }} />
+              <span
+                className="label"
+                style={{ color: "var(--theme-accent)", display: "inline-block" }}
+              >
+                AVAILABLE LIQUID BALANCE (REAL-TIME STREAM)
+              </span>
+            </div>
+
             <h1 className="display" style={{ fontSize: "clamp(44px, 9vw, 150px)" }}>
               {formattedValue.split("").map((char, i) => (
                 <AnimatedDigit key={`${i}-${char}`} char={char} />
@@ -214,10 +221,10 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
               <button
                 className="btn"
                 style={{ fontSize: "16px", padding: "var(--spacer-16) var(--spacer-32)" }}
-                onClick={() => void handleWithdraw()}
+                onClick={() => setShowWithdrawModal(true)}
                 disabled={withdrawing}
               >
-                {withdrawing ? "Withdrawing…" : "Withdraw Instantly (Zero Fee)"}
+                Withdraw Instantly (Zero Fee)
               </button>
             </div>
             {status && (
@@ -233,6 +240,46 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
           </div>
         </div>
       </section>
+
+      {/* WITHDRAWAL CONFIRMATION MODAL */}
+      <Modal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        title="Confirm Instant Withdrawal"
+        eyebrow="SOROBAN ZERO-GAS SETTLEMENT"
+      >
+        <p style={{ color: "var(--grey-300)", marginBottom: "var(--spacer-20)" }}>
+          You are initiating a direct, instant wage claim from the YieldFlow payroll vault on Stellar testnet.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacer-12)", background: "rgba(255,255,255,0.02)", padding: "var(--spacer-16)", border: "1px solid var(--grey-100)", marginBottom: "var(--spacer-24)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span className="label" style={{ color: "var(--grey-300)" }}>AMOUNT AVAILABLE</span>
+            <strong style={{ fontFamily: "FK Roman Standard", fontSize: "18px", color: "var(--theme-accent)" }}>
+              {formattedValue}
+            </strong>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span className="label" style={{ color: "var(--grey-300)" }}>DESTINATION WALLET</span>
+            <span style={{ fontFamily: "NON Natural Mono", fontSize: "12px", color: "var(--theme-fg)" }}>
+              {short}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span className="label" style={{ color: "var(--grey-300)" }}>NETWORK FEE</span>
+            <span className="label" style={{ color: "var(--theme-accent)" }}>$0.00 (Gasless Relayer)</span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "var(--spacer-12)", justifyContent: "flex-end" }}>
+          <button className="btn btn-outline" onClick={() => setShowWithdrawModal(false)} disabled={withdrawing}>
+            Cancel
+          </button>
+          <button className="btn" onClick={() => void handleWithdraw()} disabled={withdrawing}>
+            {withdrawing ? "Processing Tx…" : "Confirm & Withdraw Now"}
+          </button>
+        </div>
+      </Modal>
 
       <section className="section-block">
         <SectionHeader
@@ -263,7 +310,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
                 )}
                 {history.map((item) => (
                   <tr key={item.id}>
-                    <td style={{ color: "var(--grey-300)" }}>{item.id}</td>
+                    <td style={{ color: "var(--grey-300)", fontFamily: "NON Natural Mono" }}>{item.id}</td>
                     <td style={{ color: "var(--grey-300)" }}>{item.date}</td>
                     <td>{item.dest}</td>
                     <td style={{ fontWeight: 600, color: "var(--theme-accent)" }}>{item.amount}</td>
