@@ -9,6 +9,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
   const [employerAddress, setEmployerAddress] = useState<string>("");
   const [status, setStatus] = useState<string | null>(null);
   const [funding, setFunding] = useState(false);
+  const [fundAmount, setFundAmount] = useState(10);
   const [error, setError] = useState<string | null>(null);
   const [activeChartPoint, setActiveChartPoint] = useState<{ day: string; apy: number; yieldVal: string } | null>(null);
 
@@ -37,7 +38,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
     setStatus(null);
     setError(null);
     try {
-      const tx = await sdk.depositPayroll(1);
+      const tx = await sdk.depositPayroll(fundAmount);
       setStatus(
         tx.status === "failed"
           ? `Deposit failed (${tx.txId})`
@@ -130,7 +131,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
           index="01"
           eyebrow="TREASURY VAULT"
           thesis="Corporate payroll capital actively generating yield."
-          paragraph="Live vault stats from the YieldFlow Soroban contracts on Stellar testnet."
+          paragraph="Live vault stats from Soroban + Blend lending pool on Stellar testnet."
         />
 
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
@@ -213,8 +214,11 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
             </div>
 
             <div style={{ display: "flex", gap: "var(--spacer-12)", marginTop: "var(--spacer-32)", flexWrap: "wrap" }}>
+              {[10, 25, 50, 100].map((n) => (
+                <button key={n} type="button" className="btn btn-outline" style={{ fontSize: "12px", borderColor: fundAmount === n ? "var(--theme-accent)" : undefined, color: fundAmount === n ? "var(--theme-accent)" : undefined }} onClick={() => setFundAmount(n)} disabled={funding}>{`${n}`}</button>
+              ))}
               <button className="btn" onClick={() => void fundVault()} disabled={funding}>
-                {funding ? "Funding…" : "Fund Vault ($1)"}
+                {funding ? "Funding…" : `Fund Vault (${fundAmount})`}
               </button>
               <button className="btn btn-outline" onClick={() => onNavigate("approvals")}>
                 Manage Streams

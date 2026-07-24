@@ -1,4 +1,4 @@
-/**
+﻿/**
  * YieldFlow SDK — live client for Dragonfly UI.
  * Talks to same-origin /api (Vercel serverless) which signs Soroban txs on testnet.
  */
@@ -21,6 +21,7 @@ export const DEMO_EMPLOYEE_ADDRESS =
   "GBPDU4S2VIXMNW4VUZKNFHQ7CHAU2RZA7DGPY4K77CZFGK6LMESZWSL4";
 
 const SESSION_KEY = "yieldflow.employeeId";
+const SESSION_TOKEN_KEY = "yieldflow.sessionToken";
 
 function toNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -33,12 +34,18 @@ function toNumber(value: unknown, fallback = 0): number {
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+  const token = localStorage.getItem(SESSION_TOKEN_KEY);
+  if (token && !headers.authorization) {
+    headers.authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      "content-type": "application/json",
-      ...(options?.headers || {}),
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -60,7 +67,6 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
     if (!id || id === DEMO_EMPLOYEE_ID || id === "emp_001") {
       return DEMO_EMPLOYEE_ADDRESS;
     }
-    // If UI already passes a G... address, keep it.
     if (id.startsWith("G") && id.length >= 56) return id;
     return DEMO_EMPLOYEE_ADDRESS;
   }
@@ -70,7 +76,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
   }
 
   async depositPayroll(amount: number): Promise<TxStatus> {
-    const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : 1;
+    const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : 10;
     const result = await apiFetch<{
       txHash: string;
       status: string;
@@ -91,6 +97,8 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       yieldRoutePercent?: number;
       activeEmployees?: number;
       projectedApy?: string;
+      blendEnabled?: boolean;
+      yieldLiveValue?: string | number;
     }>("/api/stats");
 
     const totalPool = toNumber(raw.totalPool);
@@ -116,13 +124,17 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       employeeId: string;
       name?: string;
       walletAddress?: string;
+      sessionToken?: string;
     }>("/api/employee/login", {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify({ employeeId: DEMO_EMPLOYEE_ADDRESS }),
     });
 
     const employeeId = session.employeeId || DEMO_EMPLOYEE_ADDRESS;
     localStorage.setItem(SESSION_KEY, employeeId);
+    if (session.sessionToken) {
+      localStorage.setItem(SESSION_TOKEN_KEY, session.sessionToken);
+    }
     return {
       employeeId,
       name: session.name || "Demo Employee",
@@ -132,10 +144,11 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
 
   async restoreEmployeeSession(): Promise<{ employeeId: string | null }> {
     const cached = localStorage.getItem(SESSION_KEY);
-    if (cached) return { employeeId: cached };
+    const token = localStorage.getItem(SESSION_TOKEN_KEY);
+    if (cached && token) return { employeeId: cached };
 
     try {
-      const session = await apiFetch<{ employeeId: string }>("/api/employee/session");
+      const session = await apiFetch<{ employeeId: string | null }>("/api/employee/session");
       if (session.employeeId) {
         localStorage.setItem(SESSION_KEY, session.employeeId);
         return { employeeId: session.employeeId };
@@ -143,11 +156,12 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
     } catch {
       /* ignore */
     }
-    return { employeeId: null };
+    return { employeeId: cached };
   }
 
   logoutEmployee(): void {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_TOKEN_KEY);
   }
 
   async getEmployeeBalance(id: string): Promise<EmployeeBalance> {
@@ -194,16 +208,12 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
     }
   }
 
-  /**
-   * Approval maps to on-chain stream presence for the demo employee.
-   * If a stream already exists (testnet smoke stream), approval succeeds.
-   * If missing, server attempts create_stream via signed API.
-   */
   async getApprovalStatus(id: string): Promise<ApprovalStatus> {
     const employeeId = this.resolveEmployeeAddress(id);
     try {
       const balance = await this.getEmployeeBalance(employeeId);
-      const approved = (balance.streamCap ?? 0) > 0 || balance.unlockedAmount > 0 || (balance.ratePerSecond ?? 0) > 0;
+      const approved =
+        (balance.streamCap ?? 0) > 0 || balance.unlockedAmount > 0 || (balance.ratePerSecond ?? 0) > 0;
       return {
         approved,
         employeeId,
@@ -219,7 +229,6 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
   ): Promise<{ approved: boolean; txId?: string; message?: string }> {
     const employeeId = this.resolveEmployeeAddress(id);
 
-    // Already-live stream? Treat as approved authorization.
     const existing = await this.getApprovalStatus(employeeId);
     if (existing.approved) {
       return {
@@ -228,7 +237,6 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       };
     }
 
-    // Attempt on-chain create_stream via API (employer-signed).
     const result = await apiFetch<{
       approved?: boolean;
       txHash?: string;
@@ -239,7 +247,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       method: "POST",
       body: JSON.stringify({
         employeeId,
-        totalAmount: "5",
+        totalAmount: "50",
         durationDays: 30,
       }),
     });

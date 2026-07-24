@@ -1,44 +1,43 @@
-{
-  "network": "testnet",
-  "asset_code": "USDC",
-  "asset_issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-  "token_contract_id": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
-  "source": "existing Stellar testnet USDC",
-  "accounts": {
-    "deployer": {
-      "alias": "yieldflow-deployer",
-      "address": "GD2XEYNTQ4BWVK6ORZPHU625ZKRT2ICPDVSEXCDLPWCHHJXBPPMD6IJM"
-    },
-    "employer": {
-      "alias": "employer-test",
-      "address": "GDIPYV4FKF7WWB45NWT52RESKJ2TRCKGBMVH7R64K2L6PXQDEMF7QOTI"
-    },
-    "employee": {
-      "alias": "employee-test",
-      "address": "GBPDU4S2VIXMNW4VUZKNFHQ7CHAU2RZA7DGPY4K77CZFGK6LMESZWSL4"
-    }
-  },
-  "trustlines": {
-    "employer-test": {
-      "asset": "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-      "established": true,
-      "current_balance": "0.0000000"
-    },
-    "employee-test": {
-      "asset": "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-      "established": true,
-      "current_balance": "0.0000000"
-    }
-  },
-  "circle_faucet": {
-    "status": "manual_action_required",
-    "network": "Stellar Testnet",
-    "asset": "USDC",
-    "send_to": "GDIPYV4FKF7WWB45NWT52RESKJ2TRCKGBMVH7R64K2L6PXQDEMF7QOTI",
-    "url": "https://faucet.circle.com"
-  },
-  "blend_testnet": {
-    "matching_pool_for_this_usdc_issuer_found": false,
-    "reason": "Blend UI testnet config references NEXT_PUBLIC_USDC_ISSUER=GATALTGTWIOT6BUDBCZM3Q4OQ4BO2COLOAZ7IYSKPLC2PMSOPPGF5V56, not the Circle issuer GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5."
-  }
+﻿{
+    "token_contract_id":  "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    "asset_issuer":  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    "blend_pool_id":  "CAPBMXIQTICKWFPWFDJWMAKBXBPJZUKLNONQH3MLPLLBKQ643CYN5PRW",
+    "source":  "existing Stellar testnet USDC + Blend pool",
+    "accounts":  {
+                     "deployer":  {
+                                      "alias":  "yieldflow-deployer",
+                                      "address":  "GD2XEYNTQ4BWVK6ORZPHU625ZKRT2ICPDVSEXCDLPWCHHJXBPPMD6IJM"
+                                  },
+                     "employer":  {
+                                      "alias":  "employer-test",
+                                      "address":  "GDIPYV4FKF7WWB45NWT52RESKJ2TRCKGBMVH7R64K2L6PXQDEMF7QOTI"
+                                  },
+                     "employee":  {
+                                      "alias":  "employee-test",
+                                      "address":  "GBPDU4S2VIXMNW4VUZKNFHQ7CHAU2RZA7DGPY4K77CZFGK6LMESZWSL4"
+                                  }
+                 },
+    "asset_code":  "USDC",
+    "circle_faucet":  {
+                          "status":  "manual_action_required",
+                          "network":  "Stellar Testnet",
+                          "asset":  "USDC",
+                          "send_to":  "GDIPYV4FKF7WWB45NWT52RESKJ2TRCKGBMVH7R64K2L6PXQDEMF7QOTI",
+                          "url":  "https://faucet.circle.com"
+                      },
+    "blend_notes":  "Circle testnet USDC is reserve index 1 on Blend reward-zone pool CAPBMX...",
+    "trustlines":  {
+                       "employer-test":  {
+                                             "asset":  "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+                                             "established":  true,
+                                             "current_balance":  "0.0000000"
+                                         },
+                       "employee-test":  {
+                                             "asset":  "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+                                             "established":  true,
+                                             "current_balance":  "0.0000000"
+                                         }
+                   },
+    "network":  "testnet",
+    "blend_usdc_matched":  true
 }

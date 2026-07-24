@@ -278,6 +278,12 @@
                 "map": [
                   {
                     "key": {
+                      "symbol": "blend_pool"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
                       "symbol": "buffer_bps"
                     },
                     "val": {

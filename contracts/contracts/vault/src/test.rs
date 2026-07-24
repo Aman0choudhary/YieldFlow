@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 use super::*;
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, panic_with_error};
@@ -69,6 +69,7 @@ fn deposits_payroll_and_splits_buffer_from_yield_principal() {
     assert_eq!(stats.yield_principal, 8_500_i128 * USDC);
     assert_eq!(stats.total_pool, 10_000_i128 * USDC);
     assert!(stats.buffer_healthy);
+    assert!(!stats.blend_enabled);
 
     assert_eq!(token.balance(&s.vault), 10_000_i128 * USDC);
     assert_eq!(token.balance(&s.employer), 90_000_i128 * USDC);
@@ -103,14 +104,32 @@ fn rebalances_yield_accounting_back_to_buffer() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #5)")]
-fn blocks_release_larger_than_buffer() {
+fn auto_pulls_from_yield_leg_when_buffer_is_short() {
     let s = setup();
+    let token = TokenClient::new(&s.env, &s.token);
 
     s.client.deposit_payroll(&(10_000_i128 * USDC));
     s.streaming
         .set_available(&s.employee, &(2_000_i128 * USDC));
-    s.client.release_buffer(&s.employee, &(2_000_i128 * USDC));
+    // buffer is only 1500; release 2000 should pull 500 from yield principal
+    let stats = s.client.release_buffer(&s.employee, &(2_000_i128 * USDC));
+
+    assert_eq!(stats.buffer_balance, 0);
+    assert_eq!(stats.yield_principal, 8_000_i128 * USDC);
+    assert_eq!(stats.total_released, 2_000_i128 * USDC);
+    assert_eq!(token.balance(&s.employee), 2_000_i128 * USDC);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn blocks_release_larger_than_buffer_plus_yield() {
+    let s = setup();
+
+    s.client.deposit_payroll(&(10_000_i128 * USDC));
+    s.streaming
+        .set_available(&s.employee, &(20_000_i128 * USDC));
+    // total pool is 10000; requesting more should fail on yield shortfall
+    s.client.release_buffer(&s.employee, &(12_000_i128 * USDC));
 }
 
 #[test]
