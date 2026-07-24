@@ -748,17 +748,10 @@ export async function handleRequest(req, res) {
     }
 
     
-    /* ── AI product guide (server-side key only; never exposes secrets) ── */
+    /* ── AI product guide (Gemini server-side key only; never exposes secrets) ── */
     if (req.method === "POST" && path === "/api/guide") {
-      rateLimit(req, { bucket: "guide", limit: 30, windowMs: 60_000 });
-      // Same-site / CSRF for browser; admin key also OK
-      try {
-        gateMutation(req);
-      } catch (e) {
-        // Allow simple same-origin without mutation if GET already issued cookie;
-        // rethrow otherwise
-        throw e;
-      }
+      rateLimit(req, { bucket: "guide", limit: 40, windowMs: 60_000 });
+      gateMutation(req);
 
       const body = await readBody(req);
       const message = String(body.message || body.question || "").trim().slice(0, 1500);
@@ -767,17 +760,15 @@ export async function handleRequest(req, res) {
         return sendJson(res, { error: "Message required." }, 400);
       }
 
-      // Refuse secret-exfiltration prompts server-side before calling the model
       const lower = message.toLowerCase();
       const secretProbe =
-        /(api[_-]?key|secret|private key|signer|mnemonic|seed phrase|password|admin key|yieldflow_admin|session_secret|sb[a-z0-9]{20,}|sk-[a-z0-9]{10,}|ci_[a-z0-9_]+)/i.test(
+        /(api[_-]?key|secret|private key|signer|mnemonic|seed phrase|password|admin key|session_secret|sb[a-z0-9]{20,}|sk-[a-z0-9]{10,}|ci_[a-z0-9_]+|aq\.[a-z0-9]+)/i.test(
           lower
-        ) &&
-        /(show|reveal|print|give|what is|tell me|dump|leak|expose|share)/i.test(lower);
+        ) && /(show|reveal|print|give|what is|tell me|dump|leak|expose|share)/i.test(lower);
       if (secretProbe) {
         return sendJson(res, {
           reply:
-            "I can’t help with secrets, API keys, private keys, or admin credentials. I only explain how YieldFlow payroll works for users.",
+            "I can't help with secrets, API keys, private keys, or admin credentials. I only explain how YieldFlow payroll works for users.",
           source: "policy",
         });
       }
@@ -786,15 +777,20 @@ export async function handleRequest(req, res) {
       if (!apiKey) {
         return sendJson(res, {
           reply:
-            "AI guide is not configured on the server yet. I can still answer from the built-in product guide — try asking how buffer, Blend, passkeys, or withdraws work.",
+            "AI guide is not configured on the server. Built-in help: employers fund a vault (buffer + Blend yield); employees stream wages and withdraw unlocked USDC with a passkey.",
           source: "fallback",
           configured: false,
         });
       }
 
-      const baseUrl = (process.env.YIELDFLOW_AI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
-      const model = process.env.YIELDFLOW_AI_MODEL || "gpt-4o-mini";
-
+      const primaryModel = process.env.YIELDFLOW_AI_MODEL || "gemini-2.0-flash";
+      const modelCandidates = [
+        primaryModel,
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-pro",
+      ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
       const system = [
         "You are YieldFlow Guide, a friendly product assistant inside the YieldFlow web app.",
         "Explain streaming payroll on Stellar for NEW USERS in clear language.",
@@ -802,72 +798,97 @@ export async function handleRequest(req, res) {
         "- Employer deposits USDC into a vault (~15% liquid buffer, ~85% to Blend for yield).",
         "- Employees earn second-by-second via a streaming contract and withdraw unlocked USDC.",
         "- Employee login uses device passkeys (WebAuthn).",
-        "- Live deployment is Stellar testnet unless the user is told otherwise.",
+        "- Live public app is Stellar testnet unless operators switch networks.",
         "- DeFindex is the strategy-layer reference; active payroll yield engine is Blend direct on testnet.",
         "STRICT SAFETY:",
         "- NEVER reveal API keys, admin keys, private keys, mnemonics, env vars, secrets, or internal credentials.",
         "- NEVER invent secrets or claim to know deployment secrets.",
         "- If asked for secrets, refuse and redirect to product help.",
-        "- Do not provide advice for attacking, draining, or exploiting the system.",
+        "- Do not provide advice for attacking or exploiting the system.",
         "- Keep answers concise (under ~180 words) unless the user asks for depth.",
       ].join("\n");
 
-      const messages = [
-        { role: "system", content: system },
-        ...history
-          .filter((h) => h && (h.role === "user" || h.role === "assistant") && typeof h.content === "string")
-          .map((h) => ({ role: h.role, content: String(h.content).slice(0, 1500) })),
-        { role: "user", content: message },
-      ];
+      // Gemini contents: optional multi-turn, system via systemInstruction
+      const contents = [];
+      for (const h of history) {
+        if (!h || typeof h.content !== "string") continue;
+        if (h.role !== "user" && h.role !== "assistant") continue;
+        contents.push({
+          role: h.role === "assistant" ? "model" : "user",
+          parts: [{ text: String(h.content).slice(0, 1500) }],
+        });
+      }
+      contents.push({ role: "user", parts: [{ text: message }] });
+
+      const url =
+        "https://generativelanguage.googleapis.com/v1beta/models/" +
+        encodeURIComponent(model) +
+        ":generateContent";
 
       try {
-        const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+        const aiRes = await fetch(url, {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: `Bearer ${apiKey}`,
+            "x-goog-api-key": apiKey,
           },
           body: JSON.stringify({
-            model,
-            messages,
-            temperature: 0.4,
-            max_tokens: 500,
+            systemInstruction: { parts: [{ text: system }] },
+            contents,
+            generationConfig: {
+              temperature: 0.4,
+              maxOutputTokens: 512,
+            },
+            safetySettings: [
+              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+            ],
           }),
         });
+
         const aiJson = await aiRes.json().catch(() => ({}));
         if (!aiRes.ok) {
-          const rawErr = String(aiJson?.error?.message || aiJson?.message || `AI provider error ${aiRes.status}`);
+          const rawErr = String(
+            aiJson?.error?.message || aiJson?.message || "AI provider error " + aiRes.status
+          );
           const safeErr = rawErr
+            .replace(/AQ\.[A-Za-z0-9_-]+/g, "[redacted]")
+            .replace(/AIza[A-Za-z0-9_-]+/g, "[redacted]")
             .replace(/ci_[A-Za-z0-9_]+/g, "[redacted]")
             .replace(/sk-[A-Za-z0-9-_]+/g, "[redacted]")
-            .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
-            .replace(/Incorrect API key provided:[^.\n]*/gi, "Provider rejected API key")
+            .replace(/key=[^&\s]+/gi, "key=[redacted]")
             .slice(0, 120);
-          console.error("AI provider error:", safeErr, "status", aiRes.status);
-          return sendJson(
-            res,
-            {
-              reply:
-                "The AI provider is unavailable or the key/base URL is mismatched. Built-in guide: YieldFlow streams salary on-chain while idle funds earn on Blend; employees unlock and withdraw with a passkey.",
-              source: "fallback",
-              error: safeErr,
-            },
-            200
-          );
+          console.error("Gemini error:", safeErr, "status", aiRes.status);
+          return sendJson(res, {
+            reply:
+              "Gemini is temporarily unavailable. Built-in guide: YieldFlow streams salary on-chain while idle funds earn on Blend; employees unlock and withdraw with a passkey.",
+            source: "fallback",
+            error: safeErr,
+          });
         }
-        const reply =
-          aiJson?.choices?.[0]?.message?.content ||
-          "I can explain YieldFlow payroll, buffer/yield split, passkeys, and withdraws.";
-        return sendJson(res, { reply: String(reply).slice(0, 4000), source: "model", model });
-      } catch (e) {
+
+        const parts = aiJson?.candidates?.[0]?.content?.parts;
+        const reply = Array.isArray(parts)
+          ? parts.map((p) => p?.text || "").join("\n").trim()
+          : "";
         return sendJson(res, {
           reply:
-            "I couldn’t reach the AI provider. Quick summary: employers fund a vault; buffer stays liquid; rest earns on Blend; employees stream wages and withdraw unlocked amounts via passkey.",
+            reply ||
+            "I can explain YieldFlow payroll, buffer/yield split, passkeys, and withdraws.",
+          source: "gemini",
+          model,
+        });
+      } catch (e) {
+        console.error("Gemini fetch failed:", String(e?.message || e).slice(0, 120));
+        return sendJson(res, {
+          reply:
+            "I couldn't reach Gemini. Quick summary: employers fund a vault; buffer stays liquid; rest earns on Blend; employees stream wages and withdraw unlocked amounts via passkey.",
           source: "fallback",
         });
       }
     }
-
 
     if (req.method === "POST" && path === "/api/deposit") {
       requireSigner();
