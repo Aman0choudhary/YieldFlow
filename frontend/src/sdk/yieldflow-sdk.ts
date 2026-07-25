@@ -25,6 +25,7 @@ export const DEMO_EMPLOYEE_ADDRESS =
 
 const SESSION_KEY = "yieldflow.employeeId";
 const SESSION_TOKEN_KEY = "yieldflow.sessionToken";
+const ADMIN_KEY_STORAGE = "yieldflow.adminApiKey";
 
 function toNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -84,12 +85,22 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       throw new Error("Minimum deposit is $5 USDC.");
     }
     const safeAmount = amount;
+    let adminKey = "";
+    try {
+      adminKey = sessionStorage.getItem(ADMIN_KEY_STORAGE) || "";
+    } catch {
+      /* ignore */
+    }
+    const depositHeaders: Record<string, string> = {};
+    if (adminKey) depositHeaders["x-yieldflow-admin-key"] = adminKey;
+
     const result = await apiFetch<{
       txHash: string;
       status: string;
       amount?: string;
     }>("/api/deposit", {
       method: "POST",
+      headers: depositHeaders,
       body: JSON.stringify({ amount: String(safeAmount) }),
     });
     const mapped = mapTxStatus(result.status, result.txHash);

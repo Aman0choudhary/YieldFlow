@@ -27,8 +27,8 @@ export function AdminPanel({ onNavigate }: { onNavigate: (view: string) => void 
     }
   });
   const [unlocked, setUnlocked] = useState(() => Boolean(adminKey));
-  const [amount, setAmount] = useState("10");
-  const [streamAmount, setStreamAmount] = useState("50");
+  const [amount, setAmount] = useState("8");
+  const [streamAmount, setStreamAmount] = useState("8");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

@@ -77,20 +77,32 @@ export function pushLocalWithdrawal(item: LocalWithdrawal) {
 export function friendlyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err || "Unknown error");
   const lower = msg.toLowerCase();
-  if (lower.includes("insufficient") || lower.includes("balance") || lower.includes("not within the allowed range")) {
-    return "Not enough testnet USDC on the employer account. Fund GD2X… via Circle testnet faucet, then retry.";
+
+  // Mainnet money ops
+  if (lower.includes("admin-key") || lower.includes("admin key") || lower.includes("x-yieldflow-admin-key")) {
+    return "Mainnet deposit requires Admin Console unlock (admin API key). Open Menu → 06 ADMIN CONSOLE, unlock, then deposit.";
   }
-  if (lower.includes("signer") || lower.includes("503")) {
-    return "Server signer is not configured. Deposit/withdraw needs YIELDFLOW_SIGNER_SECRET on the API.";
+  if (lower.includes("not within the allowed range") || lower.includes("insufficient")) {
+    return "Not enough USDC on the employer/signer account for this deposit. Confirm USDC is on GB65HDY… then try a smaller amount (min $5).";
   }
-  if (lower.includes("unauthorized") || lower.includes("401") || lower.includes("403") || lower.includes("session")) {
-    return "Session expired or unauthorized. Sign in again from the employee portal.";
+  // Do NOT match bare "balance" — it rewrote real mainnet errors into fake testnet faucet text.
+  if (lower.includes("signer") && (lower.includes("required") || lower.includes("503") || lower.includes("not configured"))) {
+    return "Server signer is not configured. Deposit needs YIELDFLOW_SIGNER_SECRET on the API.";
+  }
+  if (lower.includes("csrf")) {
+    return "Security check failed (CSRF). Refresh the page, unlock Admin Console, and retry.";
+  }
+  if ((lower.includes("unauthorized") || lower.includes("401") || lower.includes("403") || lower.includes("session")) && lower.includes("employee")) {
+    return "Employee session expired or unauthorized. Sign in again from the employee portal.";
   }
   if (lower.includes("nothing unlocked")) {
-    return "Nothing unlocked yet — wait a few seconds for the stream to accrue.";
+    return "Nothing unlocked yet — wait for the stream to accrue, or create a stream first.";
   }
   if (lower.includes("simulation failed")) {
-    return `On-chain simulation failed: ${msg}`;
+    return "On-chain simulation failed: " + msg;
+  }
+  if (lower.includes("gd2x") || lower.includes("testnet faucet")) {
+    return "Mainnet uses real Circle USDC on the employer account (GB65HDY…), not the old testnet faucet.";
   }
   return msg;
 }
