@@ -1,5 +1,5 @@
-ï»¿/**
- * YieldFlow SDK â€” live client for Dragonfly UI.
+/**
+ * YieldFlow SDK — live client for Dragonfly UI.
  * Talks to same-origin /api (Vercel serverless) which signs Soroban txs on testnet.
  */
 
@@ -20,7 +20,8 @@ const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 /** Demo employee used by live testnet stream (env-backed on server). */
 export const DEMO_EMPLOYEE_ID = "emp_001";
 export const DEMO_EMPLOYEE_ADDRESS =
-  "GBPDU4S2VIXMNW4VUZKNFHQ7CHAU2RZA7DGPY4K77CZFGK6LMESZWSL4";
+  import.meta.env.VITE_YIELDFLOW_EMPLOYEE_ADDRESS ||
+  "GB65HDYFWIUA3UMCWJ3WCERBTS2L7YWHFKXIPMLYRXWEZI53WL7GTSTL";
 
 const SESSION_KEY = "yieldflow.employeeId";
 const SESSION_TOKEN_KEY = "yieldflow.sessionToken";
@@ -139,7 +140,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
   async loginEmployee(): Promise<{ employeeId: string; name?: string; walletAddress?: string }> {
     // Real browser WebAuthn passkey (register on first visit, auth after that).
     await syncAuthNetwork();
-    const session = await loginWithPasskey(DEMO_EMPLOYEE_ADDRESS);
+    const session = await loginWithPasskey(DEMO_EMPLOYEE_ADDRESS || undefined);
     const employeeId = session.employeeId || DEMO_EMPLOYEE_ADDRESS;
     localStorage.setItem(SESSION_KEY, employeeId);
     if (session.sessionToken) {
@@ -150,7 +151,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       kind: "auth",
       label: session.registered ? "Passkey registered" : "Passkey login",
       timestamp: new Date().toISOString(),
-      amount: employeeId.slice(0, 6) + "â€¦",
+      amount: employeeId.slice(0, 6) + "…",
     });
     return {
       employeeId,
@@ -182,7 +183,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
     // Keep enrolled passkey seal so next login uses device biometrics, not re-register.
   }
 
-  /** Full device unlink â€” user must register passkey again. */
+  /** Full device unlink — user must register passkey again. */
   resetPasskey(): void {
     clearEmployeeAuthStorage();
   }

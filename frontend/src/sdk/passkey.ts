@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Browser WebAuthn (Passkey) client for YieldFlow employee auth.
  */
 import {
@@ -73,7 +73,13 @@ export async function syncAuthNetwork(): Promise<void> {
 
 function isStaleSealError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err || "");
-  return /invalid sealed token/i.test(msg) || /sealed token signature/i.test(msg);
+  return (
+    /invalid sealed token/i.test(msg) ||
+    /sealed token signature/i.test(msg) ||
+    /not authorized for this deployment/i.test(msg) ||
+    /employee not authorized/i.test(msg) ||
+    /employee not on allowlist/i.test(msg)
+  );
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
@@ -159,7 +165,7 @@ export async function loginWithPasskey(employeeId?: string): Promise<PasskeySess
     return await authenticatePasskey(employeeId, existing);
   } catch (err) {
     if (isStaleSealError(err)) {
-      // Session secret rotated or network switched — clear and enroll fresh passkey seal
+      // Session secret rotated or network switched � clear and enroll fresh passkey seal
       clearEmployeeAuthStorage();
       return registerPasskey(employeeId);
     }
