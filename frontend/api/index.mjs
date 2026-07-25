@@ -1,5 +1,5 @@
-﻿/**
- * YieldFlow Backend — Vercel Serverless + local Node
+/**
+ * YieldFlow Backend � Vercel Serverless + local Node
  * Real Soroban vault/streaming + Blend pool stats (testnet).
  */
 
@@ -189,10 +189,29 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function isStreamNotFoundError(error) {
+  const msg = error?.message || String(error || "");
+  // StreamingContract Error::StreamNotFound = 6
+  return /Error\(Contract,\s*#6\)/i.test(msg) || /StreamNotFound/i.test(msg) || /failing with contract error",\s*6/i.test(msg);
+}
+
 function humanizeChainError(error) {
   const msg = error?.message || String(error || "");
+  if (isStreamNotFoundError(error)) {
+    return Object.assign(
+      new Error("No payroll stream yet for this employee. Employer must approve/create a stream first."),
+      { statusCode: 404, code: "STREAM_NOT_FOUND" }
+    );
+  }
   if (/not within the allowed range|insufficient/i.test(msg)) {
-    return Object.assign(new Error("Insufficient testnet USDC on employer/signer account. Top up via Circle faucet."), { statusCode: 400 });
+    return Object.assign(
+      new Error(
+        isMainnetLabel()
+          ? "Insufficient USDC on employer/signer account (mainnet). Fund Circle USDC + trustline, then deposit."
+          : "Insufficient testnet USDC on employer/signer account. Top up via Circle faucet."
+      ),
+      { statusCode: 400 }
+    );
   }
   if (/YIELDFLOW_SIGNER_SECRET/i.test(msg)) {
     return Object.assign(new Error(msg), { statusCode: 503 });
@@ -372,7 +391,7 @@ function estimateSupplyApy(reserve) {
     borrow = rBase + rOne + rTwo * ((u - t) / Math.max(1e-9, maxU - t));
     if (u > 0.95) borrow += rThree * ((u - 0.95) / 0.05);
   }
-  // supply ≈ borrow * utilization * (1 - 10% backstop take rough)
+  // supply � borrow * utilization * (1 - 10% backstop take rough)
   const supply = borrow * u * 0.9;
   return Math.max(0, supply * 100);
 }
@@ -476,7 +495,7 @@ async function mapStats(stats) {
   };
 }
 
-function mapBalance(balance) {
+function mapBalance(balance, extra = {}) {
   return {
     unlockedAmount: fromBaseUnits(balance?.unlocked_amount || 0),
     ratePerSecond: fromBaseUnits(balance?.rate_per_second || 0),
@@ -486,7 +505,28 @@ function mapBalance(balance) {
     nextPayday: formatNextPayday(balance?.end_time),
     startTime: Number(balance?.start_time || 0),
     endTime: Number(balance?.end_time || 0),
+    streamActive: extra.streamActive !== undefined ? extra.streamActive : Number(balance?.total_amount || 0) > 0,
+    ...extra,
   };
+}
+
+function emptyEmployeeBalance(employeeId, message) {
+  return mapBalance(
+    {
+      unlocked_amount: 0,
+      rate_per_second: 0,
+      withdrawn_amount: 0,
+      total_amount: 0,
+      withdrawable_amount: 0,
+      start_time: 0,
+      end_time: 0,
+    },
+    {
+      streamActive: false,
+      employeeId: employeeId || config.employeeAddress,
+      message: message || "No payroll stream yet. Employer must approve a stream first.",
+    }
+  );
 }
 
 function resolveApiPath(req, url) {
@@ -613,7 +653,7 @@ export async function handleRequest(req, res) {
     }
 
 
-    /* ── Passkey: registration options ── */
+    /* -- Passkey: registration options -- */
     if (req.method === "POST" && path === "/api/employee/passkey/register/options") {
       rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
       const body = await readBody(req);
@@ -636,7 +676,7 @@ export async function handleRequest(req, res) {
       return sendJson(res, { options, challengeToken, employeeId, rpID: pk.rpID, origin: pk.origin });
     }
 
-    /* ── Passkey: registration verify ── */
+    /* -- Passkey: registration verify -- */
     if (req.method === "POST" && path === "/api/employee/passkey/register/verify") {
       rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
       gateMutation(req);
@@ -666,7 +706,7 @@ export async function handleRequest(req, res) {
       pushActivity({
         kind: "auth",
         label: "Passkey registered",
-        amount: employeeId.slice(0, 6) + "…",
+        amount: employeeId.slice(0, 6) + "�",
       });
       return sendJson(res, {
         employeeId,
@@ -679,7 +719,7 @@ export async function handleRequest(req, res) {
       });
     }
 
-    /* ── Passkey: login options ── */
+    /* -- Passkey: login options -- */
     if (req.method === "POST" && path === "/api/employee/passkey/login/options") {
       rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
       const body = await readBody(req);
@@ -704,7 +744,7 @@ export async function handleRequest(req, res) {
       return sendJson(res, { options, challengeToken, employeeId, rpID: pk.rpID, origin: pk.origin });
     }
 
-    /* ── Passkey: login verify ── */
+    /* -- Passkey: login verify -- */
     if (req.method === "POST" && path === "/api/employee/passkey/login/verify") {
       rateLimit(req, { bucket: "passkey", limit: 20, windowMs: 60_000 });
       gateMutation(req);
@@ -737,7 +777,7 @@ export async function handleRequest(req, res) {
       pushActivity({
         kind: "auth",
         label: "Passkey login",
-        amount: record.employeeId.slice(0, 6) + "…",
+        amount: record.employeeId.slice(0, 6) + "�",
       });
       return sendJson(res, {
         employeeId: record.employeeId,
@@ -749,7 +789,7 @@ export async function handleRequest(req, res) {
       });
     }
 
-    /* ── Legacy login: requires existing passkey seal (no open auto-login) ── */
+    /* -- Legacy login: requires existing passkey seal (no open auto-login) -- */
     if (req.method === "POST" && path === "/api/employee/login") {
       const body = await readBody(req);
       const employeeId = body.employeeId || config.employeeAddress;
@@ -771,8 +811,22 @@ export async function handleRequest(req, res) {
 
     if (req.method === "GET" && path === "/api/employee/balance") {
       const employee = url.searchParams.get("employeeId") || config.employeeAddress;
-      const result = await streaming.simulate("balance", [toAddr(employee)]);
-      return sendJson(res, mapBalance(result));
+      try {
+        const result = await streaming.simulate("balance", [toAddr(employee)]);
+        return sendJson(res, mapBalance(result, { streamActive: true, employeeId: employee }));
+      } catch (err) {
+        // Fresh mainnet deploys have no stream until employer approves one � do not break employee portal.
+        if (isStreamNotFoundError(err)) {
+          return sendJson(
+            res,
+            emptyEmployeeBalance(
+              employee,
+              "No payroll stream yet for this employee. Use Approvals / Admin Console to create a stream, then fund the vault."
+            )
+          );
+        }
+        throw err;
+      }
     }
 
     if (req.method === "GET" && path === "/api/tx/status") {
@@ -781,7 +835,7 @@ export async function handleRequest(req, res) {
     }
 
     
-    /* ── AI product guide (Groq server-side key only; never exposes secrets) ── */
+    /* -- AI product guide (Groq server-side key only; never exposes secrets) -- */
     if (req.method === "POST" && path === "/api/guide") {
       rateLimit(req, { bucket: "guide", limit: 40, windowMs: 60_000 });
       gateMutation(req);
@@ -1044,7 +1098,7 @@ export async function handleRequest(req, res) {
       pushActivity({
         id: hash || `rebalance_${Date.now()}`,
         kind: "yield",
-        label: "Rebalanced Blend → buffer",
+        label: "Rebalanced Blend ? buffer",
         amount: `${amount} USDC`,
       });
       return sendJson(res, {
