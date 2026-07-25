@@ -13,7 +13,7 @@ import type {
   YieldFlowSDK,
 } from "./types";
 import { loadLocalActivity, mergeActivity, pushLocalActivity } from "./local-persist";
-import { loginWithPasskey, clearCredentialSeal } from "./passkey";
+import { loginWithPasskey, clearCredentialSeal, clearEmployeeAuthStorage, syncAuthNetwork } from "./passkey";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -138,6 +138,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
 
   async loginEmployee(): Promise<{ employeeId: string; name?: string; walletAddress?: string }> {
     // Real browser WebAuthn passkey (register on first visit, auth after that).
+    await syncAuthNetwork();
     const session = await loginWithPasskey(DEMO_EMPLOYEE_ADDRESS);
     const employeeId = session.employeeId || DEMO_EMPLOYEE_ADDRESS;
     localStorage.setItem(SESSION_KEY, employeeId);
@@ -183,9 +184,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
 
   /** Full device unlink — user must register passkey again. */
   resetPasskey(): void {
-    localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(SESSION_TOKEN_KEY);
-    clearCredentialSeal();
+    clearEmployeeAuthStorage();
   }
 
   async getEmployeeBalance(id: string): Promise<EmployeeBalance> {
@@ -303,4 +302,5 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
 
 export const sdk: YieldFlowSDK = new LiveYieldFlowSDK();
 export default sdk;
+
 
