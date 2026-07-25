@@ -82,7 +82,7 @@ export function Layout({
       {/* FIXED PINNED TOP HEADER */}
       <header className="site-header">
         {/* Left: Perfectly aligned logo icon + YieldFlow title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div 
             className="logo text-gradient" 
             style={{ 
@@ -116,7 +116,7 @@ export function Layout({
           </div>
           {currentView !== 'login' && (
             <button 
-              className="btn btn-outline"
+              className="btn btn-outline header-back-btn"
               style={{ 
                 padding: '4px 12px', 
                 fontSize: '11px',
@@ -153,7 +153,7 @@ export function Layout({
           >
             <span style={{ fontFamily: 'NON Natural Mono', fontSize: '13px', letterSpacing: '0.1em' }}>{'>|<'}</span>
 
-            <div style={{ display: 'flex', gap: '4px' }}>
+            <div className="header-menu-dots" style={{ display: 'flex', gap: '4px' }}>
               <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
               <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
               <span style={{ width: '5px', height: '5px', backgroundColor: 'var(--orange)', display: 'inline-block' }} />
@@ -174,7 +174,7 @@ export function Layout({
         )}
         
         {/* Right: Navigation actions */}
-        <div className="site-nav">
+        <div className="site-nav header-right">
           <div className="nav-grid" style={{ alignItems: 'center' }}>
             <div className="nav-item">
               <span style={{ 

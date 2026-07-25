@@ -458,7 +458,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
 
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
           <div className="df-cell full-width slide-up" style={{ animationDelay: "0.2s", padding: 0 }}>
-            <table className="table-df">
+            <div className="table-scroll"><table className="table-df">
               <thead>
                 <tr>
                   <th>Event ID</th>
@@ -486,7 +486,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         </div>
       </section>

@@ -330,7 +330,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
         />
         <div className="df-grid" style={{ marginTop: "var(--spacer-24)" }}>
           <div className="df-cell full-width slide-up" style={{ animationDelay: "0.2s", padding: 0 }}>
-            <table className="table-df">
+            <div className="table-scroll"><table className="table-df">
               <thead>
                 <tr>
                   <th>Withdrawal ID</th>
@@ -362,7 +362,7 @@ export function EmployeeBalance({ onNavigate }: { onNavigate?: (view: any) => vo
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         </div>
       </section>

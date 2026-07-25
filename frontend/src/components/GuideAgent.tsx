@@ -103,6 +103,7 @@ export function GuideAgent() {
   const panel = useMemo(
     () => (
       <div
+        className="guide-panel"
         style={{
           position: "fixed",
           right: "20px",
@@ -219,7 +220,7 @@ export function GuideAgent() {
       {open && panel}
       <button
         type="button"
-        className="btn"
+        className="btn guide-fab"
         onClick={() => setOpen((v) => !v)}
         style={{
           position: "fixed",
