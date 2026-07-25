@@ -1,9 +1,11 @@
-{
-  "name": "yieldflow",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "check:sdk": "node ./scripts/check-sdk-contract.js"
-  }
+﻿{
+    "name":  "yieldflow",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "scripts":  {
+                    "check:sdk":  "node ./scripts/check-sdk-contract.js",
+                    "build":  "npm run build --prefix frontend",
+                    "install:frontend":  "npm install --prefix frontend"
+                }
 }
