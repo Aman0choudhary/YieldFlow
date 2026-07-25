@@ -125,3 +125,9 @@ Until then, production stays on **testnet**: https://yieldflow-frontend.vercel.a
 - [ ] Rotate Groq key in Groq console (was pasted in chat)
 - [ ] Explicit user command: **go mainnet deploy**
 
+
+
+## Lean 50 XLM path
+
+See [MAINNET_50XLM_LEAN.md](./MAINNET_50XLM_LEAN.md). Deploy script rewritten for optimized wasm + correct init entrypoints.
+
