@@ -1,0 +1,23 @@
+﻿{
+    "vault_contract_id":  "CCS5IUVU3KRHEDQJHLZZGULEFQAFLXDBEE2FTTBZAHFOXEVH7T4VJWXW",
+    "previous_partial_deploy":  {
+                                    "vault_no_blend":  "CBMNNMWBMOKSOBKCL3AX4DEGILIOEFIZQDCFU6F7JXCKY6CZ3Q3KBEBU",
+                                    "streaming":  "CDFLB3FRRJPRFLOKHXZHOT4LJ3O22QML6SG56BWJD3FTW73AWKZDR5EN"
+                                },
+    "network":  "mainnet",
+    "source_account":  "yieldflow-mainnet",
+    "employer_address":  "GB65HDYFWIUA3UMCWJ3WCERBTS2L7YWHFKXIPMLYRXWEZI53WL7GTSTL",
+    "xlm_remaining":  "12.1131000",
+    "buffer_bps":  1500,
+    "yield_bps":  8500,
+    "lean_deploy":  true,
+    "rpcUrl":  "https://rpc.lightsail.network/",
+    "token_contract_id":  "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+    "networkPassphrase":  "Public Global Stellar Network ; September 2015",
+    "streaming_contract_id":  "CBDQ2ZHNX5Q7KU6GF733UOXH72FGGRUD6DDHBNXTPGXDF4E75VN3GUQ6",
+    "blend_enabled":  true,
+    "status":  "DEPLOYED",
+    "deployed_at":  "2026-07-25T05:00:54.6387658Z",
+    "blend_pool_name":  "FixedV2",
+    "blend_pool_id":  "CAJJZSGMMM3PD7N33TAPHGBUGTB43OC73HVIK2L2G6BNGGGYOSSYBXBD"
+}
