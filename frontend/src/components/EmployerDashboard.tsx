@@ -10,7 +10,8 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
   const [employerAddress, setEmployerAddress] = useState<string>("");
   const [status, setStatus] = useState<string | null>(null);
   const [funding, setFunding] = useState(false);
-  const [fundAmount, setFundAmount] = useState(10);
+  const [fundAmount, setFundAmount] = useState<number | "">(8);
+  const MIN_DEPOSIT_USDC = 5;
   const [error, setError] = useState<string | null>(null);
   const [activeChartPoint, setActiveChartPoint] = useState<{ day: string; apy: number; yieldVal: string } | null>(null);
 
@@ -39,11 +40,16 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
   }, []);
 
   const fundVault = async () => {
+    const amount = typeof fundAmount === "number" ? fundAmount : Number(fundAmount);
+    if (!Number.isFinite(amount) || amount < MIN_DEPOSIT_USDC) {
+      setError(`Minimum deposit is $${MIN_DEPOSIT_USDC} USDC.`);
+      return;
+    }
     setFunding(true);
     setStatus(null);
     setError(null);
     try {
-      const tx = await sdk.depositPayroll(fundAmount);
+      const tx = await sdk.depositPayroll(amount);
       setStatus(
         tx.status === "failed"
           ? `Deposit failed (${tx.txId})`
@@ -218,12 +224,67 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "var(--spacer-12)", marginTop: "var(--spacer-32)", flexWrap: "wrap" }}>
-              {[10, 25, 50, 100].map((n) => (
-                <button key={n} type="button" className="btn btn-outline" style={{ fontSize: "12px", borderColor: fundAmount === n ? "var(--theme-accent)" : undefined, color: fundAmount === n ? "var(--theme-accent)" : undefined }} onClick={() => setFundAmount(n)} disabled={funding}>{`${n}`}</button>
+            <div style={{ display: "flex", gap: "var(--spacer-12)", marginTop: "var(--spacer-32)", flexWrap: "wrap", alignItems: "center" }}>
+              {[5, 8, 10, 25, 50, 100].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="btn btn-outline"
+                  style={{
+                    fontSize: "12px",
+                    borderColor: fundAmount === n ? "var(--theme-accent)" : undefined,
+                    color: fundAmount === n ? "var(--theme-accent)" : undefined,
+                  }}
+                  onClick={() => setFundAmount(n)}
+                  disabled={funding}
+                >
+                  {`$${n}`}
+                </button>
               ))}
-              <button className="btn" onClick={() => void fundVault()} disabled={funding}>
-                {funding ? "Funding…" : `Fund Vault ($${fundAmount})`}
+              <label className="label" style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--grey-300)" }}>
+                Custom
+                <input
+                  type="number"
+                  min={MIN_DEPOSIT_USDC}
+                  step="0.1"
+                  inputMode="decimal"
+                  value={fundAmount}
+                  disabled={funding}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "") {
+                      setFundAmount("");
+                      return;
+                    }
+                    const n = Number(v);
+                    setFundAmount(Number.isFinite(n) ? n : "");
+                  }}
+                  placeholder={`min $${MIN_DEPOSIT_USDC}`}
+                  style={{
+                    width: "110px",
+                    padding: "10px 12px",
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid var(--grey-100)",
+                    color: "var(--theme-fg)",
+                    fontFamily: "NON Natural Mono, monospace",
+                    fontSize: "13px",
+                  }}
+                />
+                <span>USDC</span>
+              </label>
+              <button
+                className="btn"
+                onClick={() => void fundVault()}
+                disabled={
+                  funding ||
+                  fundAmount === "" ||
+                  !Number.isFinite(Number(fundAmount)) ||
+                  Number(fundAmount) < MIN_DEPOSIT_USDC
+                }
+              >
+                {funding
+                  ? "Funding..."
+                  : `Fund Vault ($${typeof fundAmount === "number" ? fundAmount : fundAmount || MIN_DEPOSIT_USDC})`}
               </button>
               <button className="btn btn-outline" onClick={() => onNavigate("approvals")}>
                 Manage Streams
@@ -243,7 +304,7 @@ export function EmployerDashboard({ onNavigate }: { onNavigate: (view: any) => v
               </p>
             )}
             <p className="label" style={{ marginTop: "var(--spacer-12)", color: "var(--grey-300)" }}>
-              Need USDC? Circle testnet faucet → employer GD2X… (see docs/TESTNET_MVP_STATUS.md)
+              Minimum deposit $5 USDC. Use presets or type a custom amount (e.g. 8.5).
             </p>
           </div>
         </div>

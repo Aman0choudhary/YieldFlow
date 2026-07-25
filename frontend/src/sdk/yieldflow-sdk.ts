@@ -1,5 +1,5 @@
 /**
- * YieldFlow SDK — live client for Dragonfly UI.
+ * YieldFlow SDK â€” live client for Dragonfly UI.
  * Talks to same-origin /api (Vercel serverless) which signs Soroban txs on testnet.
  */
 
@@ -80,7 +80,10 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
   }
 
   async depositPayroll(amount: number): Promise<TxStatus> {
-    const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : 10;
+    if (!Number.isFinite(amount) || amount < 5) {
+      throw new Error("Minimum deposit is $5 USDC.");
+    }
+    const safeAmount = amount;
     const result = await apiFetch<{
       txHash: string;
       status: string;
@@ -151,7 +154,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
       kind: "auth",
       label: session.registered ? "Passkey registered" : "Passkey login",
       timestamp: new Date().toISOString(),
-      amount: employeeId.slice(0, 6) + "…",
+      amount: employeeId.slice(0, 6) + "â€¦",
     });
     return {
       employeeId,
@@ -183,7 +186,7 @@ class LiveYieldFlowSDK implements YieldFlowSDK {
     // Keep enrolled passkey seal so next login uses device biometrics, not re-register.
   }
 
-  /** Full device unlink — user must register passkey again. */
+  /** Full device unlink â€” user must register passkey again. */
   resetPasskey(): void {
     clearEmployeeAuthStorage();
   }
