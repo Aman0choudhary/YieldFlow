@@ -9,21 +9,28 @@
 | Layer | Tech |
 |-------|------|
 | Chain | Stellar + Soroban |
-| Contracts | Rust vault + streaming (`soroban-sdk`) |
-| Yield | Blend (direct); DeFindex as strategy reference |
+| Contracts | Rust vault + streaming (`soroban-sdk` v25) |
+| Yield | Blend FixedV2 (direct); DeFindex as strategy reference |
 | Token | Circle USDC (SAC) |
 | API | Vercel serverless (`frontend/api`) |
 | Auth | WebAuthn passkeys (SimpleWebAuthn) |
 | UI | React 19 + TypeScript + Vite |
+| AI guide | Groq (server-side) |
+
+## Technical docs
+
+Start here: **[docs/TECH_STACK.md](docs/TECH_STACK.md)** — full stack, architecture, contracts, API, and security model.
 
 ## Repo layout
 
 ```
 contracts/     Soroban vault + streaming
 frontend/      UI + serverless API (primary app)
-docs/          Technical notes (see docs/README.md)
+docs/          Public technical documentation
 deployments/   Network deployment records
+config/        Network / protocol catalogs
 scripts/       Deploy / ops helpers
+sdk/           Generated contract bindings
 ```
 
 ## Quick start (local)
@@ -34,23 +41,17 @@ npm install
 npm run dev
 ```
 
-Set env from `frontend/.env.example` (never commit secrets).
+Set secrets only in local env / Vercel (never commit them). See `backend/.env.example` for variable names.
 
 ## Mainnet contracts
 
-See `deployments/mainnet.json` for live IDs.
-
-## Docs for judges
-
-Start here: **[docs/JUDGE_TECH_QA.md](docs/JUDGE_TECH_QA.md)** — stack, architecture, security, likely Q&A.
-
-Other files under `docs/` are internal ops notes (not required reading for product review).
+See `deployments/mainnet.json` for live vault, streaming, Blend, and USDC IDs.
 
 ## Security
 
 - No private keys in the frontend bundle
-- Employee withdraw requires passkey session
-- Mainnet money ops require admin key
+- Employee withdraw requires a passkey session
+- Privileged money ops are gated (CSRF / admin)
 - Report issues privately; do not open issues with secrets
 
 ## License

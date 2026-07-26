@@ -9,3 +9,18 @@ target/
 .local-mainnet-prep-secrets.env
 *.local.env
 
+
+# Local-only notes (kept on machine, not published)
+PLAN.md
+context.md
+docs/JUDGE_TECH_QA.md
+docs/ADMIN_ACCESS.md
+docs/AI_GUIDE.md
+docs/DEFINDEX_PHASE.md
+docs/MAINNET_50XLM_LEAN.md
+docs/MAINNET_READINESS.md
+docs/SECURITY_HARDENING.md
+docs/TESTNET_MVP_STATUS.md
+docs/deployment.md
+docs/sdk-contract.md
+docs/vercel-combined-deploy.md

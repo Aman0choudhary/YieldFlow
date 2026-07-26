@@ -27,7 +27,7 @@ if (Test-Path $cfgPath) {
 if (Test-Path "deployments\mainnet.template.json") { Ok "mainnet.template.json present" } else { Bad "mainnet template missing" }
 if (Test-Path "deployments\mainnet.json") { Warn "deployments/mainnet.json exists (deploy may already have run)" } else { Ok "No mainnet.json yet (expected pre-deploy)" }
 
-if (Test-Path "docs\MAINNET_READINESS.md") { Ok "MAINNET_READINESS.md present" } else { Bad "readiness doc missing" }
+if (Test-Path "docs\TECH_STACK.md") { Ok "TECH_STACK.md present" } else { Bad "tech stack doc missing" }
 if (Test-Path "frontend\vercel.json") {
   $vj = Get-Content "frontend\vercel.json" -Raw
   if ($vj -match "Content-Security-Policy") { Ok "CSP headers configured in vercel.json" } else { Warn "CSP headers not found" }

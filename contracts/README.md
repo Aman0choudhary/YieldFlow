@@ -1,14 +1,15 @@
-# Contracts
+﻿# Contracts
 
-Soroban contracts will live here.
+Soroban smart contracts for YieldFlow.
 
-MVP contracts:
+## MVP contracts
 
-- `contracts/streaming`: employee stream accounting and unlocked balance calculation.
-- `contracts/vault`: employer deposits, buffer allocation, yield allocation accounting, and controlled buffer releases.
-- `contracts/defindex_router`: DeFindex and Blend routing once the core vault is stable.
+| Crate | Role |
+|-------|------|
+| `contracts/streaming` | Employee stream accounting and unlocked balance calculation |
+| `contracts/vault` | Employer deposits, 15/85 buffer-yield split, Blend supply, buffer releases, rebalance |
 
-The first implementation target is the SDK contract documented in `docs/sdk-contract.md`.
+Architecture and API context: [`docs/TECH_STACK.md`](../docs/TECH_STACK.md).
 
 ## Commands
 
@@ -16,3 +17,10 @@ The first implementation target is the SDK contract documented in `docs/sdk-cont
 cargo test
 stellar contract build
 ```
+
+Optimized WASM outputs:
+
+- `target/wasm32v1-none/release/streaming.wasm`
+- `target/wasm32v1-none/release/vault.wasm`
+
+(from the `contracts/` workspace root after `stellar contract build`)

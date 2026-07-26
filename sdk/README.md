@@ -1,23 +1,22 @@
-# YieldFlow SDK
+﻿# YieldFlow SDK
 
-This folder is Aman-owned. It is the bridge between blockchain complexity and the frontend contract.
+Bridge between Soroban contracts and app layers.
 
-## Files
+## Layout
 
-- `mock-sdk.js`: stable mock API for UI work.
-- `yieldflow-sdk.js`: real SDK wrapper around generated Stellar contract clients.
-- `generated/streaming`: generated TypeScript package for the streaming contract.
-- `generated/vault`: generated TypeScript package for the vault contract.
+- `generated/streaming` — generated TypeScript client for the streaming contract
+- `generated/vault` — generated TypeScript client for the vault contract
+- Browser-facing SDK used by the app lives in `frontend/src/sdk/`
 
-## Regenerate Bindings
+Full product architecture: [`docs/TECH_STACK.md`](../docs/TECH_STACK.md).
+
+## Regenerate bindings
 
 ```powershell
 .\scripts\generate-bindings.ps1
 ```
 
-## Build Generated Clients
-
-Each generated package has its own dependencies:
+## Build generated clients
 
 ```powershell
 Set-Location .\sdk\generated\streaming
@@ -28,23 +27,3 @@ Set-Location ..\vault
 npm.cmd install
 npm.cmd run build
 ```
-
-## Configure Real SDK
-
-```js
-import sdk from "./yieldflow-sdk.js";
-
-await sdk.configureYieldFlowSdk({
-  rpcUrl: "https://soroban-testnet.stellar.org",
-  sourcePublicKey: "G...",
-  signTransaction,
-  contractIds: {
-    streaming: "C...",
-    vault: "C..."
-  }
-});
-
-const stats = await sdk.getEmployerStats();
-```
-
-`loginEmployee()` is intentionally still blocked until Passkey Kit integration is chosen.
