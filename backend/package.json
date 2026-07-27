@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "echo 'Backend API ready'",
     "start": "node src/server.js",
     "dev": "node src/server.js"
   },

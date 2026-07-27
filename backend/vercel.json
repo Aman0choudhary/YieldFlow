@@ -1,4 +1,6 @@
 {
+  "buildCommand": "echo 'Backend API ready'",
+  "outputDirectory": ".",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/api" }
